@@ -1,0 +1,25 @@
+{
+  "name": "BSEC",
+  "description": "Bosch Sensortec Environmental Cluster (BSEC) Software library for use with the BME680 has been conceptualized to provide higher-level signal processing and fusion for the BME680. The library receives compensated sensor values from the sensor API. It processes the BME680 signals to provide the requested sensor outputs.",
+  "homepage": "https://www.bosch-sensortec.com/software-tools/software/bsec/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BoschSensortec/BSEC-Arduino-library"
+  },
+  "version": "v1.8.1492",
+  "authors": {
+    "name": "Bosch Sensortec",
+    "email": "contact@bosch-sensortec.com"
+  },
+  "frameworks": "arduino",
+  "platforms": "*",
+  "build": {
+    "extraScript": "extra_script.py",
+    "srcFilter": [
+      "+<*>",
+      "-<cortex-*>",
+      "-<esp8266>",
+      "-<atmega2560>"
+    ]
+  }
+}

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MySat Mission Console</title>
+<style>
+  :root{
+    --bg:#0b1220; --surface:#131d31; --surface2:#1a2640; --line:#26334d; --ink:#e7ecf5; --muted:#98a5bc;
+    --ok:#5fcb8a; --warn:#e8c25a; --bad:#f07f7a; --accent:#f0b33c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  header h1{font-size:1.1rem;margin:0}
+  header .sub{color:var(--muted);font-size:.82rem}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-inline-end:6px}
+  main{padding:16px 18px;max-width:1100px;margin:0 auto}
+  .tabs{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
+  .tab{padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;font-size:.85rem}
+  .tab.active{background:var(--surface2);color:var(--ink);border-color:var(--accent)}
+  section.pane{display:none} section.pane.active{display:block}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+  .card .value{font-size:1.4rem;margin-top:2px}
+  .card .value small{font-size:.7rem;color:var(--muted);font-weight:400}
+  .card.na .value{color:var(--muted);font-size:.95rem}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+  button{background:var(--surface2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:7px 14px;cursor:pointer;font-size:.85rem}
+  button:hover{border-color:var(--accent)}
+  input,select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit}
+  .consoleRow{display:flex;gap:8px;margin-bottom:8px}
+  .consoleRow input{flex:1;font-family:ui-monospace,monospace}
+  pre{white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;max-height:340px;overflow:auto;font-family:ui-monospace,monospace;font-size:.82rem}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500}
+  a{color:var(--accent);text-decoration:none}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .gallery .shot{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center}
+  .gallery img{max-width:100%;border-radius:6px;display:block;margin-bottom:6px;background:#000}
+  .hint{color:var(--muted);font-size:.8rem;margin:6px 0 14px}
+  code{background:var(--surface2);padding:1px 5px;border-radius:4px;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="callsign">MYSAT</h1>
+    <div class="sub"><span class="dot" id="linkDot" style="background:var(--muted)"></span><span id="linkText">connecting...</span></div>
+  </div>
+  <div class="sub" id="clock">--</div>
+</header>
+<main>
+  <div class="tabs">
+    <div class="tab active" data-pane="telemetry">Telemetry</div>
+    <div class="tab" data-pane="control">Control</div>
+    <div class="tab" data-pane="photos">Photos</div>
+    <div class="tab" data-pane="logs">Data logs</div>
+    <div class="tab" data-pane="events">Events</div>
+    <div class="tab" data-pane="console">Console</div>
+  </div>
+
+  <section class="pane active" id="pane-telemetry">
+    <div class="grid" id="tmCards"></div>
+  </section>
+
+  <section class="pane" id="pane-control">
+    <div class="actions">
+      <button onclick="cmd('solar deploy')">Deploy solar panels</button>
+      <button onclick="cmd('solar retract')">Retract solar panels</button>
+      <button onclick="cmd('led toggle')">Toggle STAR LED</button>
+      <button onclick="cmd('led blink')">Blink test</button>
+      <button onclick="cmd('imu calibrate')">Calibrate IMU (hold still)</button>
+      <button onclick="cmd('imu align')">Zero attitude</button>
+    </div>
+    <div class="hint">These call the same commands as the serial console and <code>/api/cmd</code>.</div>
+    <div class="actions">
+      <input id="logPeriod" type="number" min="1" value="10" style="width:80px">
+      <button onclick="cmd('log start ' + document.getElementById('logPeriod').value)">Start logging (s)</button>
+      <button onclick="cmd('log stop')">Stop logging</button>
+    </div>
+    <pre id="ctlOut"></pre>
+  </section>
+
+  <section class="pane" id="pane-photos">
+    <div class="actions"><button onclick="capturePhoto()">Capture photo</button></div>
+    <div class="hint">The camera is a secondary payload here &mdash; photos are stored on the satellite in a small ring buffer.</div>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="pane" id="pane-logs">
+    <div class="hint">Mission data CSV files, rotated hourly while logging is active.</div>
+    <table><thead><tr><th>File</th><th>Size</th><th></th></tr></thead><tbody id="logRows"></tbody></table>
+  </section>
+
+  <section class="pane" id="pane-events">
+    <div class="actions"><button onclick="loadEvents()">Refresh</button> <button onclick="cmd('events clear')">Clear</button></div>
+    <pre id="eventsOut">loading...</pre>
+  </section>
+
+  <section class="pane" id="pane-console">
+    <div class="consoleRow"><input id="cmdline" placeholder="type a command, e.g. help" onkeydown="if(event.key=='Enter')sendCmd()"><button onclick="sendCmd()">Send</button></div>
+    <pre id="consoleOut"></pre>
+  </section>
+</main>
+
+<script>
+function $(id){ return document.getElementById(id); }
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+  t.classList.add('active'); $('pane-' + t.dataset.pane).classList.add('active');
+  if (t.dataset.pane === 'photos') loadPhotos();
+  if (t.dataset.pane === 'logs') loadLogs();
+  if (t.dataset.pane === 'events') loadEvents();
+});
+
+function cardHtml(label, value, na) {
+  return '<div class="card' + (na ? ' na' : '') + '"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+}
+
+async function poll() {
+  try {
+    const [tm, hk] = await Promise.all([
+      fetch('/api/telemetry').then(r => r.json()),
+      fetch('/api/hk').then(r => r.json())
+    ]);
+    $('callsign').textContent = hk.callsign || 'MYSAT';
+    $('clock').textContent = tm.time + ' (' + tm.clock_status + ')';
+    const connected = hk.wifi.mode === 1 ? hk.wifi.connected : true;
+    $('linkDot').style.background = connected ? 'var(--ok)' : 'var(--bad)';
+    $('linkText').textContent = hk.wifi.mode === 0 ? 'WiFi off' : (hk.wifi.mode === 1 ? ('station, ' + hk.wifi.ip) : ('access point, ' + hk.wifi.ip));
+
+    let h = '';
+    h += cardHtml('Uptime', Math.floor(hk.uptime_s / 3600) + 'h ' + Math.floor((hk.uptime_s % 3600) / 60) + 'm');
+    h += cardHtml('Boot count', hk.boots + ' <small>(' + hk.reset_reason + ')</small>');
+    h += cardHtml('Free heap', (hk.heap_free / 1024).toFixed(0) + ' KB');
+    if (tm.env.valid) {
+      h += cardHtml('Temperature', tm.env.temperature_c.toFixed(1) + ' &deg;C');
+      h += cardHtml('Pressure', tm.env.pressure_hpa.toFixed(1) + ' hPa');
+      h += cardHtml('Humidity', tm.env.humidity_pct.toFixed(0) + ' %');
+      h += cardHtml('Air quality (IAQ)', tm.env.iaq.toFixed(0) + ' <small>acc ' + tm.env.iaq_accuracy + '</small>');
+    } else h += cardHtml('Environment', 'BME680 not detected', true);
+    if (tm.attitude.valid) {
+      h += cardHtml('Attitude', 'R' + tm.attitude.roll_deg.toFixed(0) + '&deg; P' + tm.attitude.pitch_deg.toFixed(0) + '&deg; Y' + tm.attitude.yaw_deg.toFixed(0) + '&deg;' + (tm.attitude.calibrated ? '' : ' <small>uncal.</small>'));
+      h += cardHtml('Rotation rate', tm.attitude.rate_mag_dps.toFixed(1) + ' &deg;/s');
+    } else h += cardHtml('Attitude', 'IMU not detected', true);
+    if (tm.sun.valid) h += cardHtml('Sun sensors', 'L' + tm.sun.raw[0] + ' B' + tm.sun.raw[1] + ' R' + tm.sun.raw[2] + ' F' + tm.sun.raw[3]);
+    else h += cardHtml('Sun sensors', 'ADS1015 not detected', true);
+    if (tm.power.valid) {
+      h += cardHtml('Battery', tm.power.batt_v.toFixed(2) + ' V, ' + tm.power.batt_ma.toFixed(0) + ' mA');
+      h += cardHtml('Solar panels', tm.power.panel_v.toFixed(2) + ' V, L' + tm.power.panel_left_ma.toFixed(0) + ' R' + tm.power.panel_right_ma.toFixed(0) + ' mA');
+    } else h += cardHtml('Power', 'INA3221 not detected', true);
+    h += cardHtml('Panels', hk.panels_deployed ? 'Deployed' : 'Retracted');
+    h += cardHtml('AUX link', hk.aux.present ? ('ok, servo ' + hk.aux.servo_angle + '&deg;') : 'no reply', !hk.aux.present);
+    h += cardHtml('Data logging', tm.logging.enabled ? ('active, ' + tm.logging.rows + ' rows') : 'stopped');
+    $('tmCards').innerHTML = h;
+  } catch (e) { $('linkText').textContent = 'no response'; $('linkDot').style.background = 'var(--bad)'; }
+}
+setInterval(poll, 2000); poll();
+
+async function cmd(line) {
+  const r = await fetch('/api/cmd', { method: 'POST', body: line });
+  const t = await r.text();
+  $('ctlOut').textContent = '> ' + line + '\n' + t + $('ctlOut').textContent;
+  $('consoleOut').textContent = '> ' + line + '\n' + t + $('consoleOut').textContent;
+  return t;
+}
+function sendCmd() { const el = $('cmdline'); if (el.value.trim()) cmd(el.value.trim()); el.value = ''; }
+
+async function loadPhotos() {
+  const list = await fetch('/api/photos').then(r => r.json());
+  $('gallery').innerHTML = list.length ? list.map(p =>
+    '<div class="shot"><img src="/api/photo?id=' + p.id + '" loading="lazy"><div>#' + p.id + '</div><div style="color:var(--muted);font-size:.75rem">' + p.ts + '</div></div>'
+  ).join('') : '<div class="hint">No photos yet.</div>';
+}
+async function capturePhoto() { await fetch('/api/photo/capture'); loadPhotos(); }
+
+async function loadLogs() {
+  const list = await fetch('/api/logs').then(r => r.json());
+  $('logRows').innerHTML = list.length ? list.map(f =>
+    '<tr><td>' + f.name + '</td><td>' + f.size + ' B</td><td><a href="/api/logs/download?file=' + encodeURIComponent(f.name) + '">download</a></td></tr>'
+  ).join('') : '<tr><td colspan="3" class="hint">No log files yet.</td></tr>';
+}
+
+async function loadEvents() { $('eventsOut').textContent = await fetch('/api/events').then(r => r.text()); }
+</script>
+</body>
+</html>
