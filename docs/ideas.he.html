@@ -1,0 +1,847 @@
+<title>MySat כלוויין אמיתי</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#E9EDF4; --ink:#131C30; --muted:#5C6980; --line:#D7DDE8;
+  --accent:#B86E00; --accent-ink:#FFFFFF; --accent-soft:#FBF1DF;
+  --ok:#2E7D4F; --warn:#B8860B; --bad:#B0413E;
+  --real:#2E7D4F; --derived:#2F6FB3; --sim:#9A4FB8; --tag-ink:#FFFFFF;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --display:'Frank Ruhl Libre','David',Georgia,serif;
+  --body:'Heebo','Assistant','Noto Sans Hebrew',Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B1220; --surface:#131D31; --surface-2:#1A2640; --ink:#E7ECF5; --muted:#98A5BC; --line:#26334D;
+    --accent:#F0B33C; --accent-ink:#0B1220; --accent-soft:#2A2410;
+    --ok:#5FCB8A; --warn:#E8C25A; --bad:#F07F7A;
+    --real:#5FCB8A; --derived:#7FB2F0; --sim:#C48BE0; --tag-ink:#0B1220;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B1220; --surface:#131D31; --surface-2:#1A2640; --ink:#E7ECF5; --muted:#98A5BC; --line:#26334D;
+  --accent:#F0B33C; --accent-ink:#0B1220; --accent-soft:#2A2410;
+  --ok:#5FCB8A; --warn:#E8C25A; --bad:#F07F7A;
+  --real:#5FCB8A; --derived:#7FB2F0; --sim:#C48BE0; --tag-ink:#0B1220;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.7;direction:rtl}
+.wrap{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.2rem,5vw,3.6rem)}
+h2{font-size:1.9rem;margin-block:0 .35em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0 0 .8em}
+a{color:var(--accent)}
+.eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.04em;color:var(--muted);direction:ltr;text-align:start;display:inline-block}
+.lede{font-size:1.15rem;max-width:68ch;color:var(--ink)}
+.prose{max-width:72ch}
+.muted{color:var(--muted)}
+.ltr{direction:ltr;unicode-bidi:isolate;font-family:var(--mono);font-size:.92em}
+code,.mono{font-family:var(--mono);font-size:.88em;direction:ltr;unicode-bidi:isolate}
+code{background:var(--surface-2);padding:.05em .35em;border-radius:4px}
+
+/* masthead */
+.mast{display:grid;gap:22px;padding-bottom:28px;border-bottom:1px solid var(--line)}
+.facts{display:flex;flex-wrap:wrap;gap:10px}
+.fact{font-family:var(--mono);font-size:.8rem;direction:ltr;unicode-bidi:isolate;padding:.3em .7em;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted)}
+.fact b{color:var(--ink);font-weight:500}
+
+/* nav */
+.toc{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-start;padding:18px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.toc a{text-decoration:none;color:var(--muted)}
+.toc a:hover,.toc a:focus-visible{color:var(--accent)}
+
+section{padding-block:44px;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.sec-head{display:grid;gap:6px;margin-bottom:22px;max-width:72ch}
+.sec-head .en{font-family:var(--mono);font-size:.78rem;color:var(--muted);direction:ltr;text-align:start;display:inline-block}
+
+/* two-column truth section */
+.two{display:grid;grid-template-columns:1fr;gap:28px;align-items:start}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:start;padding:.55em .6em;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--muted);font-size:.85rem}
+td .mono{font-size:.85em}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+
+.findings{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.findings li{background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--bad);border-radius:8px;padding:12px 16px}
+.findings li b{display:block;margin-bottom:2px}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:var(--surface-2);border-radius:10px;padding:14px 18px;margin-top:22px}
+.tag{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;padding:.15em .55em;border-radius:4px;color:var(--tag-ink);direction:ltr;unicode-bidi:isolate}
+.tag.real{background:var(--real)} .tag.derived{background:var(--derived)} .tag.sim{background:var(--sim)}
+
+/* idea cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.idea{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:grid;gap:8px;align-content:start}
+.idea header{display:grid;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:.78rem;padding:.12em .6em;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--bg)}
+.chip.hw{border-color:transparent;background:var(--accent-soft);color:var(--ink)}
+.meter{font-size:.7rem;letter-spacing:.12em;color:var(--line);direction:ltr;unicode-bidi:isolate}
+.meter b{color:var(--accent);font-weight:400}
+.idea p{margin:0;font-size:.97rem}
+.idea .why{color:var(--muted);font-size:.9rem}
+.idea .why b,.idea .note b{color:var(--ink);font-weight:500}
+.idea .note{font-size:.9rem;border-top:1px dashed var(--line);padding-top:8px}
+.fix{border-inline-start:4px solid var(--accent)}
+
+/* telemetry frame */
+.frames{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+@media (max-width:860px){.frames{grid-template-columns:1fr}}
+pre{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-family:var(--mono);font-size:.8rem;line-height:1.5;direction:ltr;text-align:left;overflow-x:auto;color:var(--ink)}
+.frames figcaption{font-size:.85rem;color:var(--muted);margin-bottom:6px}
+figure{margin:0}
+
+/* flagship */
+.demos{display:grid;gap:14px}
+.demo{display:grid;grid-template-columns:150px 1fr;gap:18px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+@media (max-width:700px){.demo{grid-template-columns:1fr}}
+.demo .who{font-family:var(--mono);font-size:.75rem;color:var(--muted);direction:ltr;text-align:start}
+.demo h3{margin-bottom:6px}
+.demo p{margin:0;font-size:.97rem}
+
+/* roadmap */
+.phases{display:grid;gap:0;counter-reset:ph}
+.phase{display:grid;grid-template-columns:64px 1fr;gap:16px;padding:18px 0;border-top:1px solid var(--line)}
+.phase:last-child{border-bottom:1px solid var(--line)}
+.phase .num{font-family:var(--display);font-size:2rem;color:var(--accent);line-height:1;direction:ltr;text-align:start}
+.phase h3{margin-bottom:4px}
+.phase .dur{font-family:var(--mono);font-size:.75rem;color:var(--muted);direction:ltr;display:inline-block}
+.phase ul{margin:6px 0 0;padding-inline-start:1.2em}
+.phase li{margin:0}
+.phase .out{margin-top:8px;font-size:.92rem;color:var(--muted)}
+
+/* questions */
+.qgroup{margin-bottom:26px}
+.qgroup h3{margin-bottom:10px;color:var(--accent)}
+.qs{margin:0;padding-inline-start:1.6em;display:grid;gap:10px}
+.qs li{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.qs .how{display:block;font-size:.88rem;color:var(--muted);margin-top:4px}
+.callout{background:var(--accent-soft);border-inline-start:4px solid var(--accent);border-radius:8px;padding:14px 18px;margin:18px 0;max-width:72ch}
+.callout p{margin:0}
+footer{color:var(--muted);font-size:.9rem;padding-top:30px}
+@media (prefers-reduced-motion: no-preference){a{transition:color .15s}}
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+
+<header class="mast">
+  <span class="eyebrow">MYSAT 1U · IDEAS COUNCIL · 01/09/2026</span>
+  <h1>MySat כלוויין אמיתי</h1>
+  <p class="lede">קראתי את כל הקושחה המקורית (גרסה 1.4.1, כולל הסקצ' של ה-Nano) וכינסתי "מועצה" של שישה מהנדסים: תוכנת טיסה, בקרת מצב (ADCS), אנרגיה, תקשורת ותחנת קרקע, מטען מצלמה, ומבצעי משימה. יצאו כ-70 רעיונות. כאן הם מסוננים, מדורגים לפי מגניבות, מאמץ וחומרה נדרשת, עם מסלול מוצע ושאלות שרק אתם יכולים לענות עליהן.</p>
+  <div class="facts">
+    <span class="fact"><b>ESP32-CAM</b> 240 MHz · 4 MB PSRAM</span>
+    <span class="fact"><b>Nano</b> ATmega328P · I2C 0x08</span>
+    <span class="fact"><b>HC-12</b> 433 MHz · UART0</span>
+    <span class="fact"><b>MPU9250/6500</b> gyro+accel</span>
+    <span class="fact"><b>ADS1015</b> 4 sun sensors</span>
+    <span class="fact"><b>INA3221</b> battery + 2 panels</span>
+    <span class="fact"><b>BME680</b> T/RH/P/gas</span>
+    <span class="fact"><b>OV2640</b> JPEG XGA</span>
+    <span class="fact"><b>DS3231</b> RTC</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="תוכן">
+  <a href="#truth">מה באמת יש בקיט</a>
+  <a href="#obc">תוכנת טיסה</a>
+  <a href="#adcs">בקרת מצב ומסלול</a>
+  <a href="#eps">אנרגיה ותרמי</a>
+  <a href="#comms">תקשורת ותחנת קרקע</a>
+  <a href="#payload">מטען: מצלמה ומדע</a>
+  <a href="#ops">מבצעים וחינוך</a>
+  <a href="#demos">הדגמות דגל</a>
+  <a href="#roadmap">מסלול מוצע</a>
+  <a href="#questions">שאלות אליכם</a>
+</nav>
+
+<!-- ============ TRUTH ============ -->
+<section id="truth">
+  <div class="sec-head">
+    <span class="en">01 · GROUND TRUTH</span>
+    <h2>מה באמת יש בקיט, ומה מצאתי בקוד</h2>
+    <p class="muted">כל רעיון בהמשך נבדק מול החומרה הזאת ומול הקוד הקיים, לא מול ניחוש.</p>
+  </div>
+  <div class="two">
+    <div>
+      <div class="tablewrap">
+      <table>
+        <thead><tr><th>רכיב</th><th>מה הוא נותן</th><th>מה חשוב לדעת</th></tr></thead>
+        <tbody>
+          <tr><td>ESP32-CAM (מחשב הטיסה)</td><td>שני ליבות, WiFi, BLE, LittleFS</td><td>אין כמעט GPIO פנוי. המצלמה תופסת את רובם. חומרה חדשה רק דרך I2C או דרך ה-Nano.</td></tr>
+          <tr><td>Arduino Nano</td><td>סרוו לפריסת הפאנלים, הדלקת HC-12, פין SET</td><td>מקבל פקודות בלבד. אין דרך לקרוא ממנו מידע היום. יש לו הרבה פינים פנויים.</td></tr>
+          <tr><td>HC-12</td><td>צינור טורי שקוף ב-433 MHz</td><td>יושב על אותו UART כמו ה-USB. כל מה שמודפס לקונסול משודר באוויר.</td></tr>
+          <tr><td>MPU9250 או MPU6500</td><td>ג'ירו + מד תאוצה</td><td>אם זה 9250 יש בפנים גם מגנטומטר שאף אחד לא משתמש בו.</td></tr>
+          <tr><td>4 נגדי אור (ADS1015)</td><td>חיישני שמש על 4 פאות הצד</td><td>אין חיישן למעלה ולמטה. הקוד היום מניח שערך גבוה = חשוך.</td></tr>
+          <tr><td>INA3221</td><td>מתח וזרם: סוללה, פאנל שמאל, פאנל ימין</td><td>הפאנלים והסוללה אמיתיים. אפשר למדוד אנרגיה אמיתית.</td></tr>
+          <tr><td>OV2640</td><td>JPEG עד XGA</td><td>10 תמונות XGA ממלאות את כל הזיכרון הזמין.</td></tr>
+          <tr><td>LED-ים</td><td>NeoPixel צבעוני, STAR LED לבן עם PWM</td><td>היום הצבעוני אומר רק "יש WiFi או אין". ערוץ ביטוי שלא מנוצל.</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    <div>
+      <p><b>מה חייבים לתקן לפני שמוסיפים פיצ'רים.</b> אלה לא רעיונות, אלה ממצאים מהקוד. כל אחד מהם יפיל כל פיצ'ר "לווייני" שנבנה מעליו.</p>
+      <ul class="findings">
+        <li><b>הלוויין מחכה לבן אדם.</b> אם השעון לא מכוון, ה-setup נתקע לנצח על הקלדה. גם הגדרת WiFi, שם קריאה והתחלת לוגינג חוסמות את כל הלולאה. מעל רדיו זה אומר לוויין קפוא.</li>
+        <li><b>באג בחישוב המצב: כ-80% מהסיבוב הולך לאיבוד.</b> הג'ירו נקרא 20 דגימות בבת אחת כל חצי שנייה, וה-dt של הדגימה הראשונה נחתך. כל אלגוריתם ADCS צריך משימה ייעודית ב-200 Hz.</li>
+        <li><b>הרדיו כנראה לא מוגדר.</b> הפקודה <code>SetRadio</code> לא עושה כלום בצד ה-Nano. ברירת המחדל של HC-12 היא 9600 והקוד רץ ב-115200. וכל שורת לוג ודיבאג משודרת.</li>
+        <li><b>מדידת ההספק גסה.</b> ה-INA3221 נקרא בלי מיצוע, כך שפרצי WiFi מתפספסים. המתח נמדד אחרי הנגד, כך שב-500 mA הסוללה "נראית" 50 mV נמוכה יותר.</li>
+        <li><b>המצלמה יכולה לתקוע.</b> לולאת <code>while(!fb)</code> בלי timeout, ותמונה שלמה עוברת כ-base64 במחרוזת של חצי מגה.</li>
+        <li><b>אין רשת ביטחון.</b> אין watchdog, אין קריאה של סיבת האיפוס, אין מונה אתחולים. וה-heartbeat נכתב ל-NVS כל 5 שניות, שזה שחיקה מיותרת של הפלאש.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>עיקרון שחוזר בכל המסמך:</b>
+    <span class="tag real">REAL</span> נמדד פיזית בקיט
+    <span class="tag derived">DERIVED</span> מחושב ממדידות אמיתיות
+    <span class="tag sim">SIM</span> מודל או תקלה מוזרקת, ומסומן כך בממשק
+    <span class="muted">בלי הכנות הזאת החוויה "כמו לוויין אמיתי" נהיית משחק.</span>
+  </div>
+
+  <div class="frames">
+    <figure>
+      <figcaption>מה הלוויין משדר היום, כל 1.5 שניות, כטקסט חופשי באוויר</figcaption>
+<pre>MYSAT(v.1.4)
+  Frame: 1042
+===ENVIRONMENT:==================
+  Temp = 27.31 *C   | Gas res. = 84.12 KOhms
+  Pres = 1009.80 hPa | IAQ = 52.00 (medium)
+===POSITION:=====================
+  x = +2   deg
+  y = -1   deg
+  z = +37  deg
+===SUN TRACKER:==================
+  ph1 (left) = 611.00   |  ph2 (back) = 702.00
+  ph3 (right) = 455.00  |  ph4 (front) = 398.00
+...</pre>
+    </figure>
+    <figure>
+      <figcaption>ביקון מוצע: מסגרת של ~24 בתים עם CRC, פעם ב-30 שניות, כמו לוויין רדיו-חובבים</figcaption>
+<pre>1A CF | BEACON | APID 01 | SEQ 1042 | LEN 24
+  callsign  MYSAT-1
+  mode      NOMINAL      met  02d 14:07:33
+  vbat      3.87 V       ibat -118 mA
+  soc       71 %         temp  27 C
+  boots     7            last_err  NONE
+| CRC16 9F3A
+
+STAR LED (Morse, 12 WPM):  -- -.-- ... .- -   ...-  (MYSAT V)</pre>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ OBC ============ -->
+<section id="obc">
+  <div class="sec-head">
+    <span class="en">02 · FLIGHT SOFTWARE / OBC</span>
+    <h2>תוכנת טיסה: מצבים, הישרדות, זמן</h2>
+    <p class="muted">מה שהופך "סקצ' ארדואינו" ל-flight software: הלוויין מחליט לבד, שורד לבד, ומדווח מה קרה לו.</p>
+  </div>
+  <div class="grid">
+    <article class="idea fix">
+      <header><h3>יסודות: משימות FreeRTOS ו-message bus</h3>
+      <div class="chips"><span class="meter" aria-label="מגניבות 3 מתוך 5"><b>●●●</b>●●</span><span class="chip">מאמץ גדול</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>משימה לכל תת-מערכת: חיישנים (הבעלים היחיד של I2C), תקשורת, מטען, מצבים, מתזמן, ווב. תקשורת ביניהן דרך תורים. WiFi על ליבה 0, בקרה על ליבה 1.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> כך בנויים cFS של NASA ו-F Prime של JPL. משימה שנתקעת לא מפילה את הטלמטריה.</p>
+      <p class="note"><b>שימו לב:</b> זה התיקון שמחסל את כל ה-"מחכה לבן אדם", ותשתית לכל שאר הרעיונות.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מנהל מצבי משימה</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מכונת מצבים מפורשת: LEOP, COMMISSIONING, NOMINAL, SCIENCE, LOW_POWER, SAFE, EMERGENCY. כל מצב הוא שורה בטבלה: מה רץ, קצב טלמטריה, WiFi כן/לא, מצלמה מותרת, צבע LED. מעברים נובעים מאירועים ונרשמים ביומן.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> בלי מצבים מוגדרים אין ל-FDIR לאן לסגת.</p>
+    </article>
+    <article class="idea">
+      <header><h3>FDIR: watchdog, סיבת איפוס, safe mode אוטונומי</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>Task watchdog על כל המשימות. באתחול קוראים <code>esp_reset_reason()</code>, מקדמים מונה, ואם היו יותר מ-3 איפוסים ב-10 דקות נכנסים ל-SAFE: WiFi כבוי, מצלמה כבויה, מעבד ב-80 MHz, ביקון בלבד. "קופסה שחורה" בזיכרון RTC ששורד איפוס רך, בלי לשחוק פלאש.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> סולם "לולאת אתחולים ← safe mode" הוא מנגנון ההישרדות החשוב ביותר בכל קיובסאט.</p>
+      <p class="note"><b>שימו לב:</b> גם התקן I2C שנתקע צריך שגרת שחרור (9 פולסים על SCL).</p>
+    </article>
+    <article class="idea">
+      <header><h3>מתזמן פקודות מתוזמנות</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מעלים פקודות עם זמן ביצוע מוחלט (UTC) או יחסי: "בעוד 300 שניות צלם, אחרי 5 שניות שדר תמונה ממוזערת". נשמר ב-LittleFS ושורד אתחול, נמחק בכניסה ל-SAFE.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מעבר מעל תחנת קרקע נמשך 8 דקות. כל השאר מתוזמן מראש.</p>
+    </article>
+    <article class="idea">
+      <header><h3>טלמטריית תחזוקה ובדיקת גבולות</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>חבילת housekeeping קבועה: heap פנוי ומינימלי, PSRAM, טמפרטורת המעבד, תפוסת קבצים, uptime, מונה אתחולים, סיבת איפוס, מצב, שגיאות I2C לכל התקן, RSSI של WiFi, מצב ה-Nano. לכל פרמטר גבול צהוב ואדום שמייצר אירוע.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> 90% ממה שלוויין משדר זה housekeeping, ובדיקת הגבולות היא "החיישן" של FDIR.</p>
+    </article>
+    <article class="idea">
+      <header><h3>טבלת פרמטרים מוגנת CRC</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מבנה אחד לכל הספים, הקצבים, שם הקריאה, פרטי WiFi ואיכות מצלמה, עם גרסה ו-CRC-32, בשני עותקים (עבודה + "זהב"). מחליף את <code>config.txt</code>, <code>callsign.txt</code> וה-EEPROM של המנוע. אפשר לכוונן בלי לצרוב מחדש.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> טבלת פרמטרים היא הדרך היחידה לשנות התנהגות בלי העלאת תוכנה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מצב "סופת קרינה": הזרקת תקלות, scrubbing ו-TMR</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ קטן-בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>פקודה מהקרקע מעוותת ביטים אקראיים בטבלת הפרמטרים או במשתנה המצב. משימת scrubber ב-1 Hz מזהה CRC שגוי ומשחזרת מהעותק הזהב. משתנים קריטיים שמורים משולשים עם הצבעת רוב. אפשר להסלים ללולאה אינסופית מכוונת ולראות את ה-watchdog מציל.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> הגנה מ-SEU היא סטנדרט, ובודקים אותה על השולחן כי אי אפשר לבדוק אותה במסלול.</p>
+      <p class="note"><b>שימו לב:</b> ל-ESP32 אין קרינה אמיתית. זו הדגמה של המנגנון, ומסומנת <span class="tag sim">SIM</span>.</p>
+    </article>
+    <article class="idea">
+      <header><h3>העלאת קושחה (OTA) עם rollback</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מעלים קושחה חדשה דרך WiFi, מאתחלים אליה, ומאשרים אותה רק אחרי 60 שניות ובדיקה עצמית. אחרת ה-bootloader חוזר לגרסה הקודמת.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> העלאות תוכנה הן שגרה, ותמונה פגומה לא יכולה להרוג את הלוויין.</p>
+      <p class="note"><b>המחיר:</b> שתי מחיצות אפליקציה חוצות את מקום הקבצים. 5 תמונות SVGA במקום 10 XGA. דרך HC-12 זה לא ריאלי: 1.5 MB ב-9600 baud זה חצי שעה בלי תיקון שגיאות.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ה-Nano כ-watchdog ובקר משנה עצמאי</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן-בינוני</span><span class="chip hw">אופציונלי: חוט אחד</span></div></header>
+      <p>ה-Nano מקבל watchdog משלו, עונה על <code>Wire.onRequest</code> עם מבנה סטטוס (זווית סרוו, מצב רדיו, uptime, מונה heartbeat), ומצפה לסימן חיים מה-ESP32 כל 10 שניות. בלי חיווט נוסף הוא יכול לכבות את הרדיו או לאותת SOS. עם חוט אחד לפין ה-EN של ה-ESP32-CAM הוא נהיה watchdog חומרתי אמיתי.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מעגלי EPS עם מפקח נפרד שורדים קריסה של מחשב הטיסה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>שעון משימה: RTC, זמן מערכת, MET וסחיפה</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>באתחול מעתיקים את ה-DS3231 לזמן המערכת כדי שקבצים, מתזמן ויומנים יסכימו. מונים Mission Elapsed Time מרגע "שיגור" שנשמר ב-NVS. כשיש WiFi, NTP מודד את סחיפת ה-RTC במקום לדרוס אותו. מצב השעון (UNSYNC / RTC / NTP) מופיע בטלמטריה. שעון לא תקין הופך לדגל, לא לתקיעה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>רצף שיגור ואיסורי פריסה</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">אופציונלי: ג'אמפר</span></div></header>
+      <p>אירוע "הפרדה" מתחיל טיימר שנשמר ב-NVS. פריסה אסורה 30 דקות, שידור אסור 45 דקות (כללי CubeSat Design Spec; להדגמה מקצרים ל-30 שניות דרך פרמטר). אחר כך פריסה אוטומטית, אישור לפי עליית זרם הפאנלים, COMMISSIONING של כל חיישן, ומעבר ל-NOMINAL.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> כל קיובסאט חייב את זה. לשכוח זה הפרה של תנאי המשגר.</p>
+    </article>
+  </div>
+  <div class="callout"><p><b>המלצת כלים:</b> לעבור ל-PlatformIO עם Arduino framework. שומרים את כל הספריות הקיימות (כולל BSEC המקומפל מראש), מקבלים מחיצות מותאמות, שתי סביבות באותו ריפו (ESP32 ו-Nano), בדיקות יחידה על המחשב ללוגיקה טהורה (CRC, מתזמן, פרוטוקול), ו-CI. ESP-IDF נקי ידרוש לכתוב מחדש את כל דרייברי החיישנים, ולא שווה את זה לאדם אחד.</p></div>
+</section>
+
+<!-- ============ ADCS ============ -->
+<section id="adcs">
+  <div class="sec-head">
+    <span class="en">03 · ADCS / GNC</span>
+    <h2>בקרת מצב, שמש ומסלול</h2>
+    <p class="muted">אין אקטואטורים לסיבוב, אז חלק מזה מדידה אמיתית וחלק מודל כן. שניהם מלמדים אותו דבר.</p>
+  </div>
+  <div class="grid">
+    <article class="idea fix">
+      <header><h3>משימת ADCS ב-200 Hz + זיהוי גלגול</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>ה-IMU נקרא במשימה משלו ומפרסם קצבי סיבוב בכל ציר ומצב: TUMBLING מעל 15°/s, DETUMBLING, STABLE מתחת ל-0.5°/s למשך 10 שניות. שומר את השיא מרגע ההפרדה. זה גם התיקון לבאג ה-80%.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> הדבר הראשון אחרי יציאה מהמשגר הוא detumble, והקרקע צופה בקצבים דוהים.</p>
+      <p class="note"><b>שימו לב:</b> טווח ±250°/s ירווה כשמסובבים ביד. לעבור ל-±1000.</p>
+    </article>
+    <article class="idea">
+      <header><h3>קווטרניון עם פילטר Madgwick</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מחליף את הפילטר המשלים הנוכחי. פלט <span class="ltr">q = [w,x,y,z]</span> ולצדו זוויות אוילר לבני אדם. ה-yaw מפסיק לסחוף רק עם מגנטומטר.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מצב הוא תמיד קווטרניון: אין gimbal lock ואפשר להרכיב סיבובים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>וקטור שמש מארבעת חיישני הצד</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">אופציונלי: 2 נגדי אור על ה-Nano</span></div></header>
+      <p>מודל קוסינוס על זוגות מנוגדים: קדימה מול אחורה, ימין מול שמאל. מקבלים אזימוט ועוצמת גובה, אבל סימן ציר z לא ניתן לצפייה כי אין חיישן למעלה ולמטה. מדווחים גם דגל "שמש לא בשדה הראייה / ליקוי". צריך קודם ללינאריזציה של נגדי האור, שהם לוגריתמיים.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> בדיוק כך עובדים חיישני שמש גסים, וחוסר הכיסוי ב-z הוא פגם תכן אמיתי שפותרים בשש פאות.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מגנטומטר: אם יש MPU9250, יש AK8963</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה אם 9250</span></div></header>
+      <p>קריאת השדה המגנטי בשלושה צירים במיקרו-טסלה, כיול hard/soft iron בתנועת שמונה, שמירה ב-NVS. פותחים bypass דרך <code>INT_PIN_CFG</code>, וקוראים מ-<span class="ltr">0x0C</span>. בישראל השדה כ-44 µT בנטייה של כ-48°.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מגנטומטר הוא חיישן המצב הבסיסי בכל קיובסאט.</p>
+      <p class="note"><b>שימו לב:</b> הסרוו, כבלי הסוללה וה-HC-12 מעוותים את השדה. אם זה MPU6500 אפשר להוסיף QMC5883L ב-I2C בכמה שקלים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>TRIAD: קביעת מצב משני וקטורים</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>וקטור כבידה (מד תאוצה) + וקטור מגנטי או שמש, מול הייחוס שלהם, נותנים מטריצת סיבוב דטרמיניסטית. משווים לאומדן של Madgwick ומדווחים את זווית חוסר ההסכמה כמדד "בריאות ADCS".</p>
+      <p class="why"><b>בלוויין אמיתי:</b> TRIAD/QUEST הוא שיטת ספר הלימוד. על השולחן הכבידה ממלאת את תפקיד וקטור הנאדיר מחיישן כדור הארץ, וזה רגע לימודי יפה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>אירוע הפרדה: טפיחה שמתחילה משימה</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>זעזוע במד התאוצה (מעל 1.5 g מעבר לכבידה) מסמן SEPARATION. מתחיל שעון המשימה, שקט רדיו, שלב detumble, ואז פריסת פאנלים וביקון ראשון. אפשר גם דרך wake-on-motion של ה-MPU.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> זה ציר הזמן של כל LEOP.</p>
+      <p class="note"><b>שימו לב:</b> להימנע מהפעלה מזויפת כשמניחים את הקובייה: דורשים קריאת 1 g יציבה לפני חימוש.</p>
+    </article>
+    <article class="idea">
+      <header><h3>אקטואטורים וירטואליים: גלגלי תנע ו-B-dot</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>אין מומנט פיזי, אז מריצים מודל כן: שלושה גלגלי תנע עם רוויה, בקר PD על שגיאת קווטרניון, ומתחילים מהמצב הנמדד. מצב "sun-point" מסובב את הגוף המדומה אל וקטור השמש הנמדד. מצב B-dot משתמש ב-dB/dt האמיתי מהמגנטומטר. על המסך: "נמדד" מול "מדומה, אם היו לנו גלגלים".</p>
+      <p class="why"><b>בלוויין אמיתי:</b> אלה בדיוק הבקרים שטסים, וניהול תנע הוא נושא מבצעי קלאסי.</p>
+      <p class="note"><b>שימו לב:</b> הממשק חייב לצעוק <span class="tag sim">SIM</span>. הקובייה לא מסתובבת לבד.</p>
+    </article>
+    <article class="idea">
+      <header><h3>הסרוו כמנוע מעקב שמש (SADA)</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה, בכפוף לבדיקה</span></div></header>
+      <p>מרחיבים את פרוטוקול ה-Nano לפקודת זווית, ומסובבים את הכנפיים לזווית הטובה ביותר לפי יחס חיישני קדימה/אחורה, או ב-hill-climb על זרם הפאנלים מה-INA3221 (כמו MPPT). צעד ±5° פעם בדקה.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מנועי SADA עוקבים אחרי השמש לפי חיישנים או אפמריס.</p>
+      <p class="note"><b>שימו לב:</b> ניתוק הכוח אחרי 2.2 שניות קיים כי הסרוו נתקע בקצה המכני. חייבים לוודא שזוויות ביניים לא מעמיסות ושהכנפיים מחזיקות נגד כבידה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>SGP4 על הלוח: מסלול, ליקויים ומעברים</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מעלים TLE (פקודת "uplink" אמיתית), ומחשבים כל שנייה קו רוחב, אורך וגובה, נקודת תת-לוויין על מפה, דגל ליקוי לפי צל גלילי, וחיזוי מעברים מעל המיקום שלכם (AOS/LOS/גובה מקסימלי). ה-HC-12 משדר רק בזמן מעבר, ושומר ומעביר בשאר הזמן. ספריית Sgp4 לארדואינו נבדקה על ESP32, פחות מ-10 KB, כמה שניות של חישוב באתחול.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> לוויין יודע איפה הוא, ותחנת הקרקע יודעת מתי הוא מגיע.</p>
+      <p class="note"><b>שימו לב:</b> TLE מתיישן (לרענן שבועית) וה-RTC חייב להיות בדיוק שניות מ-UTC. אפשר TLE של תחנת החלל למעברים אמיתיים מעל ישראל, או מסלול פיקטיבי "MYSAT-1".</p>
+    </article>
+    <article class="idea">
+      <header><h3>המצלמה כחיישן אופק וכ-star tracker</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ גדול</span><span class="chip hw">אופציונלי: מנורה, נורות LED</span></div></header>
+      <p>אופק: בחדר חשוך גלובוס מואר הוא "כדור הארץ". מסגרת אפורה קטנה, סף, נקודות קצה, התאמת מעגל, ומקבלים סטייה מנאדיר. Star tracker: 6 עד 10 נורות על התקרה, צנטרואידים, התאמת משולשים לקטלוג שמור, ומקבלים מצב "אבוד בחלל".</p>
+      <p class="why"><b>בלוויין אמיתי:</b> שני חיישני המצב האופטיים המדויקים ביותר בכל חללית.</p>
+    </article>
+    <article class="idea">
+      <header><h3>קובייה תלת-ממדית ומפת מסלול בממשק</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן-בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>קווטרניון ל-CSS <code>matrix3d</code>, בלי ספריות: קובייה עם שש פאות מסומנות, חץ שמש וחץ מגנטי. מפת עולם SVG עם נקודת תת-לוויין, עקבה, קו הטרמינטור וטביעת הרגל של התחנה שלכם. three.js אפשרי אבל שוקל 600 KB.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ערכת אימות שולחנית</h3>
+      <div class="chips"><span class="meter"><b>●●</b>●●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">אופציונלי: מגש מסתובב</span></div></header>
+      <p>פטיפון ב-33⅓ סל"ד הוא 200°/s בדיוק, בדיקת סקאלה מושלמת לג'ירו. סיבוב של 360° חייב לתת 360 ± 2. פנס טלפון במרחק 1.5 מטר בחדר חשוך הוא שמש טובה. המצפן בטלפון מול המגנטומטר. וקבצי ה-CSV הקיימים מאפשרים להריץ את אותו פילטר בפייתון ולבדוק אותו בלי חומרה.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ EPS ============ -->
+<section id="eps">
+  <div class="sec-head">
+    <span class="en">04 · EPS / THERMAL</span>
+    <h2>אנרגיה ותרמי</h2>
+    <p class="muted">כאן הכי הרבה אמת פיזית: פאנלים אמיתיים, סוללה אמיתית, זרמים אמיתיים. הקוד הנוכחי בקושי נוגע בזה.</p>
+  </div>
+  <div class="grid">
+    <article class="idea fix">
+      <header><h3>קודם כל: מיצוע ותיקון מתח ב-INA3221</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מיצוע של 64 דגימות כדי שכל קריאה תהיה ממוצע אמיתי של 0.4 שנייה במקום רגע אקראי, ותיקון <span class="ltr">V = V_bus + I·0.1</span> כי המתח נמדד אחרי הנגד. 50 mV הם כ-10% SoC באזור השטוח של ליתיום. אפס עלות, הרבה כנות.</p>
+    </article>
+    <article class="idea">
+      <header><h3>אומדן מצב טעינה (SoC)</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>ספירת קולומב על זרם הסוללה ב-2 Hz, עיגון מחדש לטבלת OCV כשהסוללה במנוחה, שמירה ב-NVS. פלט: אחוזים, mAh שנותרו, זמן לריקון. סחיפה של כ-24 mAh ליום, זניחה מול תא של 1000 mAh ומעלה אם מעגנים יומית.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מתח לבדו חסר משמעות תחת עומס.</p>
+      <p class="note"><b>שימו לב:</b> עקומת LiPo ו-LiFePO4 שונות לחלוטין. חייבים לדעת כימיה וקיבולת.</p>
+    </article>
+    <article class="idea">
+      <header><h3>תקציב אנרגיה: Wh שנוצרו מול Wh שנצרכו</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>אינטגרציה של הספק הפאנלים ושל טעינה/פריקה לדליים שעתיים (24 ב-NVS) ולפי "מסלול". דיווח מאזן נטו ו"כמה מסלולים עד ריקון בגירעון הנוכחי".</p>
+      <p class="why"><b>בלוויין אמיתי:</b> טסים עם תקציב הספק חיובי, והמפעילים בודקים אותו בכל מעבר.</p>
+    </article>
+    <article class="idea">
+      <header><h3>אפיון צריכה לפי תת-מערכת</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>שגרה חד-פעמית שמכבה ומדליקה כל צרכן בתור (STAR LED, מצלמה, WiFi, מהירות מעבד, HC-12 דרך ה-Nano) 5 שניות כל אחד, ומודדת את הדלתא בזרם הסוללה. אחר כך הקושחה משייכת את הצריכה החיה לתת-מערכות לפי המצב שלהן ומציגה פילוח.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> כך נבנים תקציבי הספק: מדלתות מדודות, לא מדפי נתונים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מצבי הספק שבאמת חוסכים זרם</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ גדול</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>NOMINAL, POWER-SAVE, SURVIVAL, CRITICAL לפי SoC עם היסטרזיס. פעולות שבאמת מורידות זרם על הלוח הזה: modem sleep של WiFi, מעבד ב-80 MHz, כיבוי מצלמה דרך פין PWDN, האטת טלמטריה, ובמצב הישרדות תנומות light sleep של שנייה. הצפי: מ-150 mA ל-60 ל-25, ואפשר לראות את זה על ה-INA3221 עצמו.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> זה ההבדל בין לוויין שמת בליקוי לכזה ששורד.</p>
+      <p class="note"><b>שימו לב:</b> light sleep מפיל את שרת הווב, אז בהישרדות "הקרקע" היא רק הרדיו. ריאליסטי. מתחת ל-8 עד 10 mA לא נרד בגלל הרגולטור וה-PSRAM.</p>
+    </article>
+    <article class="idea">
+      <header><h3>זיהוי ליקוי וסטטיסטיקת מסלול</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>ECLIPSE כשזרם הפאנלים וסכום חיישני האור נופלים מתחת לסף נלמד ל-3 שניות, SUNLIT בהיפוך עם היסטרזיס. סופרים ליקויים, משכים, הליקוי הארוך ביותר, ייצור ממוצע בשלב מואר. מצב <code>SimOrbit</code> מזייף מסלול של 90 דקות עם 35 דקות ליקוי כדי לבדוק את הלוגיקה בלילה בבית, ומסומן <span class="tag sim">SIM</span>.</p>
+    </article>
+    <article class="idea">
+      <header><h3>בריאות פאנלים: אסימטריה ומגמות</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>לכל פאנל תמונת I-V, אומדן הספק שיא יומי, ויחס אסימטריה שמאל/ימין. אסימטריה מעל 30% ל-30 שניות בזמן שמש מייצרת אירוע PANEL_SHADOW. מגמה ארוכה ב-NVS מסמנת בלאי.</p>
+      <p class="note"><b>שימו לב:</b> להפסיק למצע את שני מתחי הפאנלים כמו בקוד היום. אם הם מקובלים אחרי הנגדים, רק הזרם נושא מידע.</p>
+    </article>
+    <article class="idea">
+      <header><h3>רצף פריסה עם go/no-go ואישור טלמטרי</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>פריסה דורשת: טיימר איסור פג, סוללה מעל 3.7 V, לא בליקוי. האישור מגיע מהטלמטריה ולא מהפקודה: קפיצה בזרם הפאנלים וחתימת רעידה במד התאוצה בתוך חלון 2.2 השניות. אחרת DEPLOY_ANOMALY עם 3 נסיונות.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> "שלחתי פקודה" ו"הפאנל נפרס" הם שני דברים שונים, וההבדל ביניהם הוא כל מקצוע המבצעים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>הגנת סוללה ובריאות</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>השלת עומסים ב-3.5 V תחת עומס, מסווג מצב טעינה (CC, CV, FULL, DISCHARGE) לפי סימן הזרם ו-dV/dt, מונה מחזורים שקולים, ומבחן קיבולת בין שני עיגוני OCV.</p>
+      <p class="note"><b>כנות:</b> לנתק את התא זה תפקיד מעגל ההגנה, לא הקושחה. בלאי קיבולת בקיט ביתי לא נראה חודשים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ארבע טמפרטורות אמיתיות ואזורים תרמיים</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>BME680 ("מבנה"), רגיסטר הטמפרטורה של ה-DS3231 ("לוח EPS"), רגיסטר ה-MPU ("ADCS"), וחיישן המעבד ("OBC", מגמה בלבד). גבולות לכל אזור, יומן תרמי, ומפל OBC-מינוס-סביבה שעולה בעין כש-WiFi והמצלמה עובדים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>לולאת חימום (חלקית מדומה)</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">אופציונלי: נגד 10Ω + MOSFET</span></div></header>
+      <p>תרמוסטט על ה-STAR LED: מתחת לנקודת ייחוס ה-duty עולה, הטלמטריה מציגה duty, mA ו-Wh מצטבר. הזרם אמיתי, ההשפעה התרמית לא: LED לבן לא יחמם את ה-BME680. עם נגד 2 W על פין של ה-Nano, מודבק לחיישן, מקבלים לולאה סגורה אמיתית.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ה-Nano כבקר EPS עצמאי</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">אופציונלי: 2 נגדים + חוט</span></div></header>
+      <p>מחלק מתח של הסוללה לפין A0 של ה-Nano, ואז הוא משיל את ה-HC-12 בעצמו מתחת ל-3.4 V בלי קשר לבריאות ה-ESP32, ומאפס את ה-ESP32 אם אין heartbeat 3 דקות. מדווח 16 בתים של סטטוס ב-<code>Wire.onRequest</code>.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> בדיוק זה תפקיד כרטיס EPS: נעילת תת-מתח עצמאית ואיפוס של מחשב הטיסה.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ COMMS ============ -->
+<section id="comms">
+  <div class="sec-head">
+    <span class="en">05 · COMMS / GROUND SEGMENT</span>
+    <h2>תקשורת ותחנת קרקע</h2>
+    <p class="muted">הקונסול הוא הרדיו. אז או שהופכים אותו לקישור אמיתי, או שהוא ממשיך לשדר הודעות דיבאג לשמיים.</p>
+  </div>
+  <div class="grid">
+    <article class="idea fix">
+      <header><h3>יסודות: משמעת half-duplex ורמות לוג</h3>
+      <div class="chips"><span class="meter"><b>●●</b>●●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>כל הודעות הלוג הופכות לחבילות EVENT עם רמה. באוויר ברירת המחדל WARN בלבד. אחרי כל שידור הלוויין שותק 150 ms כ"חלון uplink". מסירים כל <code>while(!Serial.available())</code>. פרמטרים נוסעים בתוך הפקודה.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> כל קישור TT&amp;C מתוזמן. טלמטריה ופקודות לא מדברות אחת על השנייה.</p>
+      <p class="note"><b>שימו לב:</b> זה הבסיס הלא-זוהר שכל השאר צריך.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מסגור בינארי בסגנון CCSDS עם CRC ואישורים</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מילת סנכרון, סוג, APID, מונה רציף, אורך, עד 64 בתי מטען, CRC-16. 9 בתים תקורה. פרסר עם resync, השלכה על CRC שגוי, ACK תוך 200 ms או שהקרקע שולחת שוב עד 3 פעמים. מצב טקסט נשאר נגיש למי שרוצה קונסול.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> על צינור 433 MHz שקוף, רעש הופך ל-"command unrecognized". חבילות עם CRC פותרות את זה.</p>
+      <p class="note"><b>שימו לב:</b> Serial Monitor של ארדואינו יוצא לפנסיה. תחנת הקרקע מפענחת.</p>
+    </article>
+    <article class="idea">
+      <header><h3>אימות פקודות ומניעת replay</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>כל פקודה נושאת מונה 32 ביט ו-HMAC-SHA256 קטום ל-4 בתים עם מפתח משותף ב-NVS. המונה חייב לעלות. פקודה לא מאומתת נרשמת כ-AUTH_FAIL ונספרת בטלמטריה. המפתח מועלה רק דרך USB, לעולם לא באוויר. <code>PING</code> נשאר פתוח: כולם יכולים לשמוע, אף אחד לא יכול לפקד.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> CCSDS SDLS עושה בדיוק את זה. מפעילים מפחדים מחטיפה יותר מכל דבר אחר.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ביקון בסגנון רדיו-חובבים + מורס על ה-LED</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>כל 30 שניות (10 בזמן מעבר) חבילת ביקון: שם קריאה, uptime, מצב, מתח וזרם סוללה, טמפרטורה, זיכרון פנוי, מוני פקודות ואתחולים, שגיאה אחרונה. במקביל ה-STAR LED מקליד את שם הקריאה ואות בריאות במורס ב-12 מילים לדקה.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> קיובסאטים מזוהים בשם קריאה, וביקוני CW מאפשרים לחובבים לפענח בריאות באוזן.</p>
+      <p class="note"><b>שימו לב:</b> שם הקריאה צריך להיות מזהה דמה ולא קידומת אמיתית, אלא אם יש רישיון.</p>
+    </article>
+    <article class="idea">
+      <header><h3>Store-and-forward עם מעברים מדומים</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>רוב הזמן הלוויין "מחוץ לקשר": הטלמטריה נכתבת למאגר מעגלי. מעבר נפתח לפי לוח זמנים (8 דקות כל 95 דקות, כמו LEO) או לפי <code>HELLO</code> מאומת מהקרקע. בזמן המעבר הלוויין שופך הכול מאז האישור האחרון, ואז חי. ב-9600 baud יום של רשומות לוקח כ-6 דקות, וזה בדיוק המתח של טיימר המעבר.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> לוויין LEO רואה תחנה כ-4 פעמים ביום, 10 דקות כל פעם. זו ליבת כל משימה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>הורדת תמונה בחלקים עם בקשת חלקים חסרים</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>FILE_INFO ואז חלקים של 64 בתים עם אינדקס. הקרקע ממלאת מפת ביטים ומציגה תמונה שמתמלאת בהדרגה, עם בלוקים אפורים במקום החסרים. אחרי הפרץ היא שולחת מפת NACK והלוויין משדר שוב רק את מה שחסר.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> CCSDS CFDP class 2, ותחושת ה-SSTV של תמונה שמתגלה.</p>
+      <p class="note"><b>קצבים כנים:</b> כ-700 בתים לשנייה ב-9600 baud. תמונה של 30 KB לוקחת כדקה, XGA של 60 KB כשתי דקות, יותר ממעבר אמיתי. לכן קודם תמונה ממוזערת של 6 עד 10 KB, ומלאה רק לפי בקשה או דרך WiFi.</p>
+    </article>
+    <article class="idea">
+      <header><h3>איכות קישור בלי RSSI</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>ל-HC-12 אין RSSI, אז מודדים מה שאפשר: שיעור שגיאות חבילות מפערים במונה ומכשלי CRC לדקה, מונים בביקון, ופקודת <code>LINK_TEST</code> ששולחת n מסגרות ממוספרות לעקומת PER. "S-meter" בתחנה נגזר מזה.</p>
+      <p class="note"><b>שימו לב:</b> לא לזייף מספר RSSI. לקרוא לזה PER.</p>
+    </article>
+    <article class="idea">
+      <header><h3>תחנת קרקע בפייתון על מחשב או Raspberry Pi</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ גדול</span><span class="chip hw">נדרש: HC-12 שני + USB-TTL</span></div></header>
+      <p>pyserial עם ממשק גרפי: מפענח מסגרות, גרפים חיים, התראות צהוב/אדום, קונסול פקודות עם חתימה ועקיבת ACK, טיימר מעבר, הרכבת תמונות, ארכיון SQLite, יומן ביקונים, תצוגת hex גולמית. אופציונלי: פרסום ל-MQTT כדי שטלפון או מחשב שני יעקבו, בסגנון SatNOGS.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> תוכנת הקרקע היא חצי מהמשימה.</p>
+      <p class="note"><b>שימו לב:</b> זה הפריט הגדול ביותר, והיחיד שדורש חומרה: HC-12 שני ומתאם USB-TTL בכמה עשרות שקלים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>שני "פסים": HC-12 כ-UHF, WiFi כ-"S-band"</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>WiFi כבוי כברירת מחדל (חוסך כ-100 mA ונותן תקציב הספק ריאלי). פקודה או מתזמן המעברים מעלים אותו לזמן מוגבל, ואז תמונות מלאות ולוגים עוברים מהר. אין רשת מוכרת? נקודת גישה <span class="ltr">MYSAT-xxxx</span> עם captive portal. כשיש WiFi: NTP מכייל את ה-RTC ומדווח סחיפה, ו-OTA רק כאן.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> UHF לפיקוד ובקרה תמיד, S/X-band למטען רק במעבר.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ניהול ה-HC-12 מהקושחה: ערוץ, הספק, קפיצות</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מיישמים באמת את <code>RF_SET</code> ב-Nano, מדברים AT ב-9600, וחושפים פקודת <code>RADIO_SET</code> עם two-phase commit: שני הצדדים עוברים ערוץ יחד, וחוזרים לערוץ הבית אם אין קשר 60 שניות. "מצב הספק נמוך" מוריד את השידור ל-8 dBm ורואים את זה ב-PER.</p>
+      <p class="note"><b>חוקי:</b> בישראל ובאירופה רק 433.05 עד 434.79 MHz פטור מרישוי, כלומר ערוצים 1 עד 4 בלבד. ערוץ 5 ומעלה נכנס לתחום הלווייני של חובבי הרדיו. רגע לימודי יפה, לא מקום לשדר בלי רישיון.</p>
+    </article>
+    <article class="idea">
+      <header><h3>BLE כ-"כבל טבורי" לבדיקות טרום-שיגור</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>שירות Nordic UART: מהטלפון מקבלים מצב טקסט מפורט, הזרקת מפתח, כיוון שעון ובדיקה עצמית, בלי לגעת ברדיו. פקודת <code>LAUNCH</code> מנתקת אותו.</p>
+      <p class="note"><b>שימו לב:</b> BLE + WiFi + מצלמה + PSRAM נלחמים על זיכרון. לבדוק מוקדם.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ PAYLOAD ============ -->
+<section id="payload">
+  <div class="sec-head">
+    <span class="en">06 · PAYLOAD / ONBOARD PROCESSING</span>
+    <h2>מטען: מצלמה כתצפית כדור הארץ, BME680 כמכשיר מדעי</h2>
+    <p class="muted">מספרים שקובעים הכול: פריים XGA הוא 60 עד 120 KB, פענוח JPEG בקנה 1:8 נותן תמונה אפורה של 12 KB ב-100 ms, וזה סוס העבודה. Heap פנוי אחרי WiFi, מצלמה ו-BSEC: 100 עד 150 KB.</p>
+  </div>
+  <div class="grid">
+    <article class="idea fix">
+      <header><h3>קודם כל: timeout, שני buffers, סטרימינג</h3>
+      <div class="chips"><span class="meter"><b>●●</b>●●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>להחליף את <code>while(!fb)</code> ב-timeout, לעבור ל-<span class="ltr">fb_count=2, GRAB_LATEST</span> במקום להשליך פריים, ולשלוח תמונות ללקוח בחתיכות במקום מחרוזת base64 של חצי מגה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מטא-דאטה של מוצר תצפית (L1)</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>לכל תמונה קובץ JSON צמוד: מזהה מוצר בסגנון <span class="ltr">MYSAT_L1A_20260901T120000_00042</span>, זמן UTC, קווטרניון המצב, קצב ג'ירו (דגל מריחה), 4 חיישני השמש ודגל "שמש בשדה הראייה", גובה ואזימוט השמש המחושבים מהזמן והמיקום, מתח סוללה, טמפרטורה, חשיפה ורווח שנקראו מהחיישן.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> תמונה בלי נתוני עזר חסרת ערך. Sentinel ו-Planet לא מוציאים מוצר בלעדיהם.</p>
+    </article>
+    <article class="idea">
+      <header><h3>חשיפה מחיישני השמש והגנה משמש</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>לפני צילום קוראים את חיישן הפאה הקדמית: בהיר מאוד מורידים חשיפה, חשוך מעלים רווח, רוויה מסרבים או מסמנים. כמו אילוצי sun-avoidance של מכשירים אמיתיים.</p>
+    </article>
+    <article class="idea">
+      <header><h3>תמונות ממוזערות ומוצרים בדרגות</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מכל XGA מפיקים thumbnail של 2 עד 3 KB. שומרים 30 ממוזערות ו-8 מלאות. נקודת קצה לחיתוך אזור עניין בקנה 1:2 או 1:4. זה פותר גם את משבר האחסון וגם עושה את ההורדה ב-9600 baud ריאלית: 4 שניות במקום 2 דקות.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> קודם browse imagery, מלא לפי בקשה.</p>
+    </article>
+    <article class="idea">
+      <header><h3>סטטיסטיקת תמונה כטלמטריה</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>על התמונה האפורה הקטנה: ממוצע, סטיית תקן, היסטוגרמה של 16 פחים, חלק בהיר ("דמוי ענן"), חלק כהה, צפיפות קצוות, דגל רוויה. 5 ms חישוב, 40 בתים בטלמטריה במקום תמונה.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> מסכות ענן ודגלי איכות מחושבים על הלוח כדי לא להוריד פריימים חסרי תועלת.</p>
+    </article>
+    <article class="idea">
+      <header><h3>זיהוי שינוי: "מטרת הזדמנות"</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מצב תצפית: פריים זעיר כל שנייה, הפרש מול הקודם, אחוז שינוי מעל סף מייצר EVENT, קפיצה ל-XGA, צילום מלא, ורישום TOO_TRIGGER. גם לפי קפיצת אור בחיישנים או פקודה.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> לוויינים מקבלים משימה מחדש על התפרצות או שריפה.</p>
+      <p class="note"><b>שימו לב:</b> חשיפה אוטומטית מסתירה שינויים איטיים. לנרמל לפי ממוצע ולדלג על 3 פריימים אחרי שינוי גודל.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ניסוי חיישן אופק</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>מכוונים לקצה שולחן או חלון: "שמיים" בהירים מעל "קרקע" כהה. בכל עמודה מוצאים את שורת הגרדיאנט המקסימלי, מתאימים קו, ומקבלים roll ו-pitch. משווים ל-MPU ומדווחים שארית.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> חיישני אופק נותנים מצב גס בכל לוויין LEO.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מצב לילה ו-star tracker קל</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ גדול</span><span class="chip hw">אופציונלי: קרטון עם חורים</span></div></header>
+      <p>מכבים חשיפה אוטומטית, חשיפה ורווח מקסימליים, ומורידים את שעון החיישן ל-5 MHz כדי להגיע ל-0.3 עד 0.5 שנייה לפריים, המקסימום האמיתי של OV2640. יותר מזה: ערימת 8 פריימים. "כוכבים" = קרטון עם חורי סיכה ופנס מאחור. צנטרואידים, יחסי צלעות משולשים מול קטלוג, ומקבלים "קבוצת כוכבים" וזווית.</p>
+      <p class="note"><b>שימו לב:</b> רעש כהה גבוה. קודם dark frame.</p>
+    </article>
+    <article class="idea">
+      <header><h3>בריאות המצלמה: colorbar, dark, flat</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>בדיקה מובנית עם תבנית פסים ידועה, מפת פיקסלים חמים מפריים מכוסה, ופרופיל ויניטינג מנייר לבן. הסטטיסטיקה מתוקנת לפיהם, ומגמת ההידרדרות היא מדד בריאות.</p>
+    </article>
+    <article class="idea">
+      <header><h3>Tiny ML עם מגבלות כנות</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ גדול</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>ל-ESP32 הרגיל אין יחידה וקטורית. TensorFlow Lite Micro עם MobileNet קטן רץ 0.6 עד 2.5 שניות לסיווג, וה-arena חייב לשבת ב-PSRAM. סביר כ-"סיווג אחד כל 10 שניות, פלט בית אחד + ביטחון", לא וידאו. חלופה בעלות 1 ms: היסטוגרמה + קצוות + עץ החלטה של 3 מחלקות, ומלמדת את אותו שיעור.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> Φ-sat-1 של ESA מסווג עננים על הלוח כדי לא להוריד פריימים חסרי ערך.</p>
+    </article>
+    <article class="idea">
+      <header><h3>ערכת מדע אטמוספרי מה-BME680</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>גובה ברומטרי עם פקודת ייחוס (עלייה במדרגות נראית: 0.12 hPa למטר, מיצוע 10 שניות נותן מטר), נקודת טל, מגמת לחץ ל"תחזית", והתנגדות הגז ממותגת מחדש כ<b>מוניטור זיהום/outgassing</b>: טוש ליד הפתח מפיל אותה ב-50% תוך שניות ומייצר אירוע CONTAMINATION.</p>
+      <p class="note"><b>שימו לב:</b> ה-BME680 יושב ליד ESP32 בטמפרטורה של 60 עד 70 מעלות. זו טמפרטורת לוח, לא אוויר. לדווח שתיהן.</p>
+    </article>
+    <article class="idea">
+      <header><h3>קטלוג מוצרים, עדיפויות ודחיסה</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>קטלוג עם מזהה, דרגה (L0/L1/L2), גודל, עדיפות ודגל "הורד". מדיניות מחיקה: קודם L0 ישנים, ממוזערות ו-L2 מוגנים. יומן הטלמטריה בקידוד דלתא + heatshrink מתכווץ פי 3 עד 5, וכתיבה בבאפרים של 4 KB במקום שורה-שורה, כי הכתיבות הקטנות הן מה ששוחק את הפלאש.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ OPS ============ -->
+<section id="ops">
+  <div class="sec-head">
+    <span class="en">07 · MISSION OPERATIONS / EDUCATION</span>
+    <h2>מבצעים, חדר בקרה וחינוך</h2>
+    <p class="muted">איך מפעילים את הלוויין ואיך זה מרגיש. כאן הרעיונות שמייצרים "וואו" מול אנשים.</p>
+  </div>
+  <div class="grid">
+    <article class="idea">
+      <header><h3>מחזור חיים של משימה: שלבים שמשנים התנהגות</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>PRELAUNCH, LAUNCH, LEOP, COMMISSIONING, NOMINAL, SAFE, EXTENDED, EOL. כל שלב חוסם פקודות (פריסה נדחית ב-LEOP), משנה קצב טלמטריה, ומכתיב תבנית LED: נשימה ענברית ב-LEOP, דופק ירוק ב-NOMINAL, הבזק אדום כפול ב-SAFE, דהייה ב-EOL. נשמר ב-NVS.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> לכל משימה יש Flight Rules לפי שלב.</p>
+      <p class="note"><b>שימו לב:</b> חייבת להיות פקודת <code>ForcePhase</code> להדגמות, שנרשמת כ-OVERRIDE.</p>
+    </article>
+    <article class="idea">
+      <header><h3>חדר בקרה אמיתי על המחשב, לא על ה-ESP32</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ גדול</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>הלוויין מגיש רק JSON, פקודות, אירועים ותמונות, ועמוד גיבוי קטן. ה-MCC העשיר (עמוד לכל תת-מערכת, צבעי גבולות, לוח התראות, היסטוריית פקודות עם ACK/NACK, שעוני MET/UTC/מעבר, קובייה תלת-ממדית, גלריה) הוא קובץ HTML אחד על הלפטופ שמדבר עם ה-IP של הלוויין, ואחר כך עם גשר טורי מעל HC-12. הדפדפן מחזיק שעות של היסטוריה שהלוויין לא יכול.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> אף אחד לא מריץ חדר בקרה על החללית.</p>
+    </article>
+    <article class="idea">
+      <header><h3>גבולות, לוח התראות ותגי REAL/SIM</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן-בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>לכל פרמטר גבולות צהוב/אדום. חריגה מדליקה משבצת שנשארת דלוקה עד אישור, אירוע בצד הלוויין, והבזק אדום ב-LED. כל משבצת נושאת תג <span class="tag real">REAL</span>, <span class="tag derived">DERIVED</span> או <span class="tag sim">SIM</span>. הגבולות נאכפים על הלוויין כדי שיעבדו גם מעל רדיו.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מנוע תרחישים והסמכת בקרים</h3>
+      <div class="chips"><span class="meter"><b>●●●●●</b></span><span class="chip">מאמץ גדול</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p><code>StartScenario</code> מזריק תקלה בין החיישן לתצוגה, לא בחומרה: תא סוללה חלש, חיישן שמש תקוע, גלגול, זיכרון פגום, פאנל מוצל, רדיו מוחלש. המפעיל מאבחן מהטלמטריה ונותן את הפקודה הנכונה. טיימר, ניקוד, ודף debrief: זמן לזיהוי, זמן להתאוששות, פקודות שגויות. רמות: FC-L1 עד L3 עם שתי תקלות בו-זמנית.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> כך NASA ו-ESA מסמיכות בקרי טיסה: סימולציות עם תקלות מוזרקות.</p>
+      <p class="note"><b>שימו לב:</b> התרחיש חייב להסתיים לבד אחרי N דקות, ולהיות מסומן SIM כל הזמן.</p>
+    </article>
+    <article class="idea">
+      <header><h3>נהלי הפעלה מובנים</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>נהלים כ-JSON: "OP-001 בדיקת הדלקה", "OP-004 פריסת פאנלים", "OP-010 כניסה ל-Safe Mode", "OP-020 התאוששות מגלגול". כל צעד: הוראה, כפתור פקודה אופציונלי, ותנאי טלמטריה שמסתמן ירוק לבד. סיום נרשם ביומן.</p>
+      <p class="why"><b>בלוויין אמיתי:</b> שום דבר לא נפקד אד-הוק.</p>
+    </article>
+    <article class="idea">
+      <header><h3>מצב כיתה: תפקידים ו-GO/NO-GO</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>FD, EPS, ADCS, PAYLOAD, COMMS. כל דפדפן בוחר תפקיד ורואה את העמוד שלו. רק בעל התפקיד מפקד על תת-המערכת שלו, ופקודות דורשות GO ממנהל הטיסה בלוח משותף. חמישה תלמידים עסוקים בו-זמנית עם לוויין אחד.</p>
+      <p class="note"><b>שימו לב:</b> שרת הווב של ה-ESP32 חד-חוטי. הורדת תמונה חוסמת אחרים לשנייה. עוד סיבה להעביר את ה-MCC למחשב.</p>
+    </article>
+    <article class="idea">
+      <header><h3>קמפיינים מדעיים עם דו"ח אוטומטי</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>"סקר סביבתי 24 שעות", "תמונה כל שעה ליום", "יום מעקב שמש: איזו פאה ראתה הכי הרבה אור בכל שעה", "מחקר מחזור סוללה". מד התקדמות, ובסיום קובץ דו"ח קריא עם סטטיסטיקה. אתחול באמצע חייב להמשיך מ-NVS.</p>
+    </article>
+    <article class="idea">
+      <header><h3>יומן משימה מסופר</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>יומן האירועים הופך למשפטים: "MET 02:14:07, זרם הפאנל הימני ירד מתחת ל-5 mA למשך 3 דקות. הסוללה נפרקת ב-120 mA. כניסה ל-SAFE. שוחזר בפקודה מ-COMMS ב-02:19:40". להורדה כ-Markdown, דו-לשוני.</p>
+    </article>
+    <article class="idea">
+      <header><h3>"אישיות": רצף הדלקה, ביקון, שפת אורות</h3>
+      <div class="chips"><span class="meter"><b>●●●●</b>●</span><span class="chip">מאמץ קטן</span><span class="chip hw">אופציונלי: זמזם על ה-Nano</span></div></header>
+      <p>באתחול ה-NeoPixel עובר צבע לכל תת-מערכת שעולה, ונעצר על אדום במי שנכשלה. כרטיס "שפת אורות" בממשק כדי שאפשר יהיה לקרוא את הלוויין מהצד השני של החדר. עם זמזם פייזו על פין פנוי של ה-Nano גם שומעים את המורס.</p>
+    </article>
+    <article class="idea">
+      <header><h3>זמן ומסלול פשוט</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>UTC וזמן ישראל, MET, יום משימה, מספר מסלול, ויום/לילה ממסלול מדומה של 93 דקות עם פיצול 60/40. סכום חיישני האור האמיתי דורס את הסימולציה כשהחדר מואר ("REAL sun detected"). החלופה הפשוטה ל-SGP4 אם לא רוצים מפה אמיתית.</p>
+    </article>
+    <article class="idea">
+      <header><h3>השוואה ללוויין אמיתי בחלל</h3>
+      <div class="chips"><span class="meter"><b>●●●</b>●●</span><span class="chip">מאמץ קטן</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>פאנל בצד הקרקע שטוען ייצוא טלמטריה ציבורי של קיובסאט אמיתי מ-SatNOGS ומצייר את מתח הסוללה והטמפרטורה שלו לצד של MySat: "הסוללה שלכם ב-3.9 V, של הלוויין ההוא הייתה 4.1 V באותו MET".</p>
+    </article>
+    <article class="idea">
+      <header><h3>דו-לשוני ומצב לצעירים</h3>
+      <div class="chips"><span class="meter"><b>●●</b>●●●</span><span class="chip">מאמץ קטן-בינוני</span><span class="chip hw">ללא חומרה</span></div></header>
+      <p>כל המחרוזות ממילון, מתג RTL, ו-"Kid mode" עם ארבעה רמזורים גדולים: כוח, חום, סיבוב, קשר. קודי האירועים בלוויין נשארים נייטרליים לשפה. התרגום הוא עניין של תצוגה בלבד.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ DEMOS ============ -->
+<section id="demos">
+  <div class="sec-head">
+    <span class="en">08 · FLAGSHIP DEMOS</span>
+    <h2>שש הדגמות של 60 שניות</h2>
+    <p class="muted">כל חבר מועצה נשאל: מה היה משאיר מבקר עם פה פעור בדקה אחת? אלה התשובות. כל אחת בונה על 4 עד 6 מהרעיונות למעלה.</p>
+  </div>
+  <div class="demos">
+    <div class="demo"><div class="who">ADCS</div><div><h3>פריסה, שיכוך, מציאת השמש, המתנה למעבר</h3><p>חושך, מנורה אחת. טופחים על הקובייה: SEPARATION מהבהב, שעון המשימה מתחיל, שקט רדיו נספר לאחור. מסובבים אותה על מגש: 40°/s, TUMBLING, ואז STABLE כשהיא נרגעת, והקובייה על המסך משקפת. ב-T+30 שניות הכנפיים נפרסות ומסתובבות אל המנורה. חץ השמש ננעל. גלגלי התנע המדומים מסתובבים ל-sun-point. על המפה נקודת תת-הלוויין חוצה את הטרמינטור, ה-STAR LED מתעמעם לליקוי, וספירה לאחור: "המעבר הבא מעל תל אביב בעוד 47 דקות".</p></div></div>
+    <div class="demo"><div class="who">OBC / FDIR</div><div><h3>התלקחות שמש</h3><p>לוחצים FLARE בתחנת הקרקע. ביטים מתעוותים, ה-scrubber מדווח PARAM_CRC_FAIL ואז RESTORED_FROM_GOLDEN, ואז MODE_TMR_VOTE_CORRECTED. הזרקה שלישית תוקעת את משימת המטען: ה-watchdog נופל, ה-LED מחשיך. אתחול. הביקון קורא RESET=TASK_WDT BOOTS=7 MODE=SAFE, אדום איטי, WiFi כבוי. המפעיל שולח MODE NOMINAL, הלוויין עונה ACCEPTED ואז COMPLETED, LED כחול, והלוח הזמנים שהועלה מראש ממשיך ומצלם בזמן המתוזמן.</p></div></div>
+    <div class="demo"><div class="who">EPS</div><div><h3>כניסה לליקוי וחיסכון בהספק</h3><p>מבקר מכסה את שתי הכנפיים בידיים. תוך 3 שניות ECLIPSE_ENTRY, LED ענברי, חצי הייצור קורסים לאפס, מופיע "זמן לריקון". מקלידים SimSoc 35: הלוויין מכריז MODE POWER-SAVE, המצלמה נכבית, המעבד יורד ל-80 MHz, WiFi נרדם, וזרם הסוללה יורד מ-150 mA ל-60 על אותו מסך, כשעמודות השיוך מתקצרות אחת אחת. ידיים החוצה: ECLIPSE_EXIT, SoC עולה, חזרה ל-NOMINAL אחרי היסטרזיס. הכול נמדד באמת חוץ מה-SoC המוזרק, שמסומן SIM.</p></div></div>
+    <div class="demo"><div class="who">COMMS</div><div><h3>מעבר מעל תחנת הקרקע</h3><p>הלוויין שקט על השולחן, רק ה-STAR LED מהבהב את שם הקריאה במורס. הלפטופ: "Next AOS 00:00:08". AOS: התחנה שולחת HELLO חתום, הלוויין מאשר, והטלמטריה השמורה שוטפת פנימה כשהגרפים מתמלאים אחורה בזמן. "צלם": ACK תוך 200 ms, ותמונה ממוזערת נבנית בלוק אחרי בלוק. שלושה בלוקים אפורים נשארים, "מבקש 3 חלקים חסרים", והם מתמלאים. פקודה עם מפתח שגוי: NACK AUTH_FAIL באדום. LOS: חזרה לביקון בלבד, "Next AOS 01:34:52". כל זה עבר ב-433 MHz במודול של עשרה שקלים.</p></div></div>
+    <div class="demo"><div class="who">PAYLOAD</div><div><h3>מטרת הזדמנות</h3><p>הלוויין במצב תצפית, IMG_STATS כל 2 שניות ומדד שינוי שטוח. מבקר מנופף ביד: המדד קופץ, LED מהבהב ענבר, "EVENT TOO #7 Δ=38%", המצלמה קופצת ל-XGA ומצלמת. תוך 2 שניות: ממוזערת, מזהה מוצר, קווטרניון, מצב חיישני השמש, חשיפה, ושורת סטטיסטיקה. התמונה המלאה בתור "ממתין להורדה". ואז מטים את הלוויין ורואים את ה-roll מהתאמת האופק עוקב אחרי ה-MPU על המסך.</p></div></div>
+    <div class="demo"><div class="who">OPS</div><div><h3>מסלול 17, תקלת פאנל</h3><p>חדר הבקרה על הלפטופ: MET רץ, מסלול 17, לוח התראות ירוק, קובייה מסתובבת כשמטים את הלוויין. Start Scenario: PANEL_SHADOW. תוך 5 שניות משבצת הזרם של הפאנל הימני מצהיבה ואז מאדימה, ה-LED עובר להבזק אדום כפול, הביקון מתחלף ל-SAFE. המבקר מקבל את הטאבלט כ-"EPS": נוהל OP-020 נפתח עם שלושה צעדים, הסרוו זז בקול, הזרמים משתווים, לוח ההתראות נמחק באישור, LED ירוק, וכרטיס debrief: "זוהה ב-6 שניות, שוחזר ב-41. Flight Controller Level 1, זמני".</p></div></div>
+  </div>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap">
+  <div class="sec-head">
+    <span class="en">09 · PROPOSED ROADMAP</span>
+    <h2>המסלול שאני ממליץ עליו</h2>
+    <p class="muted">ארבעה שלבים, כל אחד מסתיים במשהו שאפשר להראות. הסדר חשוב: שלב 0 לא זוהר, אבל בלעדיו כל פיצ'ר "לווייני" יישבר על תקיעה, באג דגימה או רדיו לא מוגדר.</p>
+  </div>
+  <div class="phases">
+    <div class="phase"><div class="num">0</div><div>
+      <h3>יסודות שלא רואים <span class="dur">~2–3 שבועות</span></h3>
+      <ul>
+        <li>ריפו PlatformIO עם שתי סביבות (ESP32-CAM, Nano) ובדיקות על המחשב</li>
+        <li>משימות FreeRTOS, משימת חיישנים כבעלים היחיד של I2C, message bus</li>
+        <li>הסרת כל ההמתנות לבן אדם. פקודות בשורה אחת עם ארגומנטים</li>
+        <li>תיקון דגימת ה-MPU, מיצוע INA3221, timeout ו-buffers במצלמה</li>
+        <li>watchdog, סיבת איפוס, מונה אתחולים, טבלת פרמטרים עם CRC, שעון משימה</li>
+        <li>הכרעה על baud של HC-12 והפעלת RF_SET אמיתי ב-Nano</li>
+      </ul>
+      <p class="out">תוצר: הלוויין הקיים עושה אותו דבר, אבל לא נתקע, לא סוחף, ומדווח למה אתחל.</p>
+    </div></div>
+    <div class="phase"><div class="num">1</div><div>
+      <h3>לוויין חי <span class="dur">~3–4 שבועות</span></h3>
+      <ul>
+        <li>מנהל מצבים + FDIR + safe mode אוטונומי</li>
+        <li>אירוע הפרדה, LEOP עם איסורים, פריסה עם אישור טלמטרי</li>
+        <li>SoC, תקציב אנרגיה, זיהוי ליקוי, מצבי הספק שמורידים זרם באמת</li>
+        <li>קווטרניון, זיהוי גלגול, וקטור שמש; מגנטומטר אם יש</li>
+        <li>ביקון, מורס על ה-LED, שפת אורות ב-NeoPixel</li>
+      </ul>
+      <p class="out">תוצר: הדגמת "פריסה, שיכוך, מציאת השמש" ו"כניסה לליקוי". הלוויין מתנהג כמו לוויין גם בלי תחנת קרקע.</p>
+    </div></div>
+    <div class="phase"><div class="num">2</div><div>
+      <h3>קישור אמיתי <span class="dur">~4–6 שבועות</span></h3>
+      <ul>
+        <li>פרוטוקול בינארי עם CRC, ACK ואימות HMAC</li>
+        <li>store-and-forward עם מעברים, ממוזערות והורדה בחלקים</li>
+        <li>תחנת קרקע: פייתון מעל HC-12 שני, או MCC בדפדפן מעל WiFi אם אין רדיו שני</li>
+        <li>SGP4, מפת מסלול, חיזוי מעברים, WiFi כ-"S-band" עם AP fallback ו-NTP</li>
+      </ul>
+      <p class="out">תוצר: הדגמת "מעבר מעל תחנת הקרקע". חדר בקרה על הלפטופ.</p>
+    </div></div>
+    <div class="phase"><div class="num">3</div><div>
+      <h3>מבצעים ומדע <span class="dur">פתוח</span></h3>
+      <ul>
+        <li>מנוע תרחישים והסמכה, נהלים, מצב כיתה</li>
+        <li>מטרת הזדמנות, חיישן אופק, star tracker, ערכת BME680</li>
+        <li>TRIAD, אקטואטורים וירטואליים, SADA אם המכניקה מאפשרת</li>
+        <li>סופת קרינה, OTA עם rollback, Nano כבקר EPS עצמאי</li>
+      </ul>
+      <p class="out">תוצר: "התלקחות שמש", "מטרת הזדמנות", "מסלול 17". כאן בוחרים לפי מה שמדליק אתכם.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ QUESTIONS ============ -->
+<section id="questions">
+  <div class="sec-head">
+    <span class="en">10 · YOUR CALL</span>
+    <h2>השאלות שרק אתם יכולים לענות עליהן</h2>
+    <p class="muted">אספתי כ-30 שאלות משישה מהנדסים ואיחדתי אותן ל-14. ליד חלק מהן כתוב איך לבדוק. תשובה חלקית גם טובה: אענה על מה שלא ידוע בהנחות מפורשות.</p>
+  </div>
+
+  <div class="qgroup">
+    <h3>א. מטרה וקהל</h3>
+    <ol class="qs">
+      <li>למי זה? תחביב לבד על השולחן, כיתה של תלמידים, תערוכה או תחרות? זה קובע כמה עובר לתחנת הקרקע, ואם צריך תפקידים ותרחישים.</li>
+      <li>שפת הממשק: עברית עם מונחים טכניים באנגלית, דו-לשוני מלא, או אנגלית בלבד? ומי קורא, אתם או בני 12?</li>
+      <li>מה מדליק אתכם הכי הרבה מששת התחומים? תדרגו 1 עד 6, או תבחרו הדגמת דגל אחת שממנה מתחילים.</li>
+    </ol>
+  </div>
+
+  <div class="qgroup">
+    <h3>ב. חומרה, ואיך לבדוק</h3>
+    <ol class="qs" start="4">
+      <li>MPU9250 או MPU6500?<span class="how">לבדוק: לקרוא רגיסטר <span class="ltr">0x75</span> (WHO_AM_I) בכתובת <span class="ltr">0x69</span>. <span class="ltr">0x71</span> = 9250 עם מגנטומטר, <span class="ltr">0x70</span> = 6500 בלי. אשלח סקצ' של 15 שורות אם תרצו.</span></li>
+      <li>רדיו: יש HC-12 שני ומתאם USB-TTL? הקישור עובד היום בפועל? לאיזה baud ה-HC-12 מוגדר? ואיזו גרסת לוח (1.5.5 או 1.5.6 ומעלה)?<span class="how">בלי HC-12 שני, כל תחום התקשורת נשאר USB ו-WiFi. זו עדיין תחנת קרקע, רק בלי דרופאוטים אמיתיים.</span></li>
+      <li>סוללה: כימיה (LiPo / Li-ion / LiFePO4), קיבולת ב-mAh, יש מעגל הגנה? איזה מטען? והאם בהדגמות ה-USB בדרך כלל מחובר?<span class="how">אם USB מחובר תמיד, כל FDIR מבוסס סוללה צריך פקודת "תת-מתח מדומה".</span></li>
+      <li>סרוו: הכנפיים יכולות לעמוד בזוויות ביניים בלי להיתקע? הסרוו המנותק מחזיק אותן נגד כבידה?<span class="how">זה מכריע אם מעקב שמש עם הסרוו אפשרי או נשאר בינארי.</span></li>
+      <li>מצלמה: על איזו פאה היא יושבת ביחס לארבעת חיישני האור (האם "front"/ph4 היא כיוון המצלמה)? עדשה רגילה או רחבה?</li>
+    </ol>
+  </div>
+
+  <div class="qgroup">
+    <h3>ג. כמה מותר לשנות</h3>
+    <ol class="qs" start="9">
+      <li>מוכנים להלחים? חוט אחד מה-Nano לפין EN של ה-ESP32-CAM נותן watchdog חומרתי אמיתי. שני נגדים נותנים ל-Nano מד סוללה עצמאי. ג'אמפר אחד הוא "מתג הפרדה".</li>
+      <li>סביבת פיתוח: לעבור ל-VS Code + PlatformIO (ההמלצה שלי), או חובה להישאר ב-Arduino IDE כדי להישאר תואמים למדריך של MySat?</li>
+      <li>OTA עם rollback תמורת פחות תמונות (5 ב-SVGA במקום 10 ב-XGA)? כן או לא?</li>
+      <li>תחנת קרקע: מוכנים להריץ קובץ HTML או תוכנת פייתון קטנה על לפטופ או Raspberry Pi? או שהכול חייב להישאר על ה-ESP32 בלי תוכנה במחשב?</li>
+      <li>תרחישי תקלה: מותר להם להזיז חומרה באמת (לסובב סרוו, להעמיס את הסוללה דרך ה-LED), או שכל התקלות נשארות בטלמטריה בלבד?</li>
+      <li>מיקום ומסלול: באיזו עיר אתם (לחיזוי מעברים)? TLE אמיתי של תחנת החלל, או מסלול פיקטיבי "MYSAT-1"? יש אינטרנט ליד הלוויין ל-NTP ורענון TLE, או רק העלאה ידנית?</li>
+    </ol>
+  </div>
+
+  <div class="callout"><p><b>מה קורה אחרי שתענו:</b> אכתוב תוכנית ארכיטקטורה מפורטת לשלב 0 ו-1 (מבנה ריפו, ICD של הפקודות והטלמטריה, דיאגרמת מצבים, טבלת FDIR), ואתחיל לקודד. הדוחות המלאים של ששת חברי המועצה, באנגלית, נשמרים בריפו תחת <span class="ltr">docs/council/</span> לצד המסמך הזה.</p></div>
+</section>
+
+<footer>
+  נכתב על בסיס קריאת MySatKit-Firmware v1.4.1 (קומיט מ-19/08/2026) והוראות MySat. כל הערכות המאמץ הן לאדם אחד שמכיר ארדואינו. הערכות זמן, גדלים וקצבים הן סדרי גודל, לא מדידות.
+</footer>
+
+</div>
