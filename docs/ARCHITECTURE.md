@@ -18,6 +18,7 @@ attach to. See the project root `README.md` for how this fits the overall roadma
 | Second HC-12 / ground PC | None owned yet | Phase 0 keeps the console/radio human-readable text; the binary protocol (comms council report, idea 1) is deferred until you have a second radio to test against |
 | Battery | 18650 Li-ion, no USB during demos | `battery_capacity_mah` defaults to 2600; OCV-based SoC (EPS council idea 1) is a phase-1 item, not yet implemented |
 | Servo | Holds intermediate angles fine | `AUX_CMD_SERVO_ANGLE` (arbitrary angle) is implemented now, not just open/closed — sets up solar-array-drive experiments later |
+| Deployment behaviour | Pull the pin → panels deploy; flip it over → panels fold | Built as the mission sequencer described below, with a learned "up" reference so it works regardless of how the IMU is mounted |
 | Soldering | None | No hardware changes anywhere in this phase. The Nano watchdog is software-only (AVR `wdt`); the "external watchdog wired to the ESP32's EN pin" idea from the flight-software council report stays a documented option, not a default |
 | Build tooling | Your call | PlatformIO (see "Why PlatformIO" below) |
 | OTA vs more photos | Your call | Deferred to phase 1; kept the photo ring modest (8 SVGA) so the decision isn't forced yet |
@@ -54,6 +55,7 @@ you'll `pio run` instead of clicking Verify in the Arduino IDE — the extension
 │                                                                        │
 │  apps/          sensors       ★ owns I2C. Dedicated 200 Hz IMU loop   │
 │                                + 2 Hz env/sun/power/RTC loop           │
+│                 mission       separation -> deploy -> flip triggers    │
 │                 console       one-line commands (serial + web share  │
 │                                the same interpreter)                  │
 │                 data_logger   mission CSV, hourly rotation            │
@@ -85,6 +87,9 @@ Arduino/FreeRTOS types:
   reads this), and range-clamping (`params_sanitize`).
 - `cmdline.h` — the command-line tokenizer and the legacy-command alias table (`SolarDeploy` still
   works, it's rewritten to `solar deploy` before dispatch).
+- `attitude_trigger.h` — the orientation maths behind the deployment triggers: a learned "up"
+  reference, upright/sideways/inverted classification, a settled-enough-to-judge test, and a
+  hold-time debouncer.
 
 ## FreeRTOS task map
 
@@ -93,6 +98,7 @@ Arduino/FreeRTOS types:
 | `imu` | 1 | 200 Hz | IMU sampling only — the stock firmware's ~80%-of-rotation-lost bug (burst-read every 500 ms with a clamped first-sample dt) is fixed by giving attitude integration its own steady loop |
 | `sensors` | 1 | 2 Hz | env/sun/power/RTC read, publishes the `Telemetry` snapshot, runs a requested IMU calibration |
 | `console` | 1 | ~50 Hz poll | non-blocking serial read, periodic telemetry/plotter frame |
+| `mission` | 1 | 4 Hz | the deployment sequencer: separation, countdown, deploy with confirmation, orientation triggers |
 | `control` | 1 | 4 Hz | housekeeping refresh, AUX heartbeat + status poll, event log flush, watchdog feed |
 | `leds` | 1 | 50 Hz | SIGNAL LED animation, STAR LED blink-test sequencing |
 | `wifi` | 0 | event-driven | station connect with a bounded timeout, falls back to AP; never blocks anyone else |
@@ -124,6 +130,58 @@ reboots the board with reset reason `TASK_WDT`, visible in the next boot's log a
 - **AUX now reports status.** The stock Nano firmware was I2C-write-only. `AuxStatus` (servo angle/
   state, radio flags, heartbeat age, boot flags, command/CRC-error counters) is now readable from
   the OBC, and it runs its own AVR watchdog.
+
+## The deployment sequence
+
+This is the behaviour the owner asked for, built the way a real spacecraft does it.
+
+```
+   launch pin pulled
+   (power applied)          ESP_RST_POWERON  ->  SEPARATION
+          |
+          v
+   [LEOP]  countdown, amber breathing LED, mission clock starts
+          |                 default 10 s (real CubeSats: 1800 s, set mission.deploy_inhibit_s)
+          v
+   [DEPLOYING]  servo commanded open, fast amber blink
+          |
+          |  confirmation is read back, not assumed:
+          |    - AUX reports the angle its servo actually reached
+          |    - panel current before/after is logged as secondary evidence
+          v
+   [NOMINAL]  green heartbeat
+          |
+          |  turned upside down for flip_hold_s  ->  [STOWED]  (magenta blink)
+          |  turned back upright                 ->  [DEPLOYING] -> [NOMINAL]
+          v
+   any `solar ...` command  ->  [MANUAL], automatic triggers suspended
+```
+
+**A power-on reset is the separation event; a software or watchdog reset is not.** If the
+satellite reboots in flight it does not re-run its deployment. That distinction comes from
+`esp_reset_reason()`, and it is the same reason a real spacecraft latches its deployment state.
+
+**"Which way is up" is learned, not hard-coded.** The IMU's orientation relative to the cube faces
+is not documented for this kit and differs between board revisions, so the satellite records its
+own gravity vector the first time it is set down and left still for three seconds, and every later
+orientation decision is the angle between the current gravity vector and that reference
+(`shared/attitude_trigger.h`). `mission learn-upright` re-records it. Consequences worth knowing:
+- Tipping the satellite onto a *side* face reads as `sideways` and triggers nothing — only a real
+  flip past 120 degrees counts.
+- A reading is only judged when the satellite is settled: about 1 g total and rotating slower than
+  25 deg/s. While it is being carried, the last decision stands.
+- An orientation must hold for `mission.flip_hold_s` (default 2 s) before it acts, and two servo
+  movements are never closer together than `mission.actuation_gap_s` (default 5 s).
+
+The trigger maths lives in a portable header precisely so it can be unit tested: a servo moves
+because of these decisions, so `test/test_core` covers upright/inverted/sideways classification
+with an arbitrary learned axis, the settled test rejecting shaking and tumbling, and the
+debouncer's timing and reset behaviour.
+
+**Open-loop limitation, stated honestly:** the servo has no position feedback. The AUX controller
+reports the angle it *commanded*, which is why the panel-current comparison is logged alongside it.
+If the panels are moved by hand while the satellite is off, the AUX and reality disagree until the
+next full deploy or retract sweep.
 
 ## What is intentionally *not* here yet
 

@@ -36,6 +36,9 @@ void leds_tick() {
     case LED_AP_MODE: c = rgb(255, 140, 0); break;
     case LED_FAULT: { uint32_t t = now % 1500; c = (t < 100 || (t > 250 && t < 350)) ? rgb(255, 0, 0) : 0; break; }
     case LED_SAFE: { float ph = (now % 3000) / 3000.0f; uint8_t v = (uint8_t)(20 + 200 * fabsf(sinf(ph * 3.14159f))); c = rgb(v, 0, 0); break; }
+    case LED_LEOP: { float ph = (now % 1200) / 1200.0f; uint8_t v = (uint8_t)(30 + 220 * fabsf(sinf(ph * 3.14159f))); c = rgb(v, (uint8_t)(v * 0.55f), 0); break; }
+    case LED_DEPLOY: c = ((now % 250) < 125) ? rgb(255, 150, 0) : 0; break;
+    case LED_STOWED: { uint32_t t = now % 2000; c = (t < 150) ? rgb(200, 0, 200) : rgb(20, 0, 20); break; }
     default: break;
   }
   s_px.setPixelColor(0, c); s_px.show();

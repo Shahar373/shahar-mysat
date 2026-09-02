@@ -28,13 +28,23 @@
 #include "apps/camera_app.h"
 #include "apps/wifi.h"
 #include "apps/web.h"
+#include "apps/mission.h"
 #include "mysat_icd.h"
 
 static uint32_t s_boot_ms;
 
+// The mission phase owns the LED while something is actually happening to the spacecraft;
+// otherwise the light falls back to reporting the comms link, which is the next most useful thing
+// to see from across the room.
 static uint8_t current_led_state() {
   for (int i = 0; i < DEV_COUNT; i++) if (fdir_dev((DeviceId)i).failed) return LED_FAULT;
   if (millis() - s_boot_ms < 5000) return LED_BOOT;
+  switch (mission_phase()) {
+    case MPHASE_LEOP: return LED_LEOP;
+    case MPHASE_DEPLOYING: return LED_DEPLOY;
+    case MPHASE_STOWED: return LED_STOWED;
+    default: break;
+  }
   uint8_t mode; bool connected; int8_t rssi; char ip[16];
   wifi_get_status(mode, connected, rssi, ip, sizeof ip);
   if (mode == 1 && !connected) return LED_NO_LINK;
@@ -70,6 +80,9 @@ static void control_task(void*) {
       hk.fs_used = LittleFS.usedBytes();
       hk.fs_total = LittleFS.totalBytes();
       hk.mode = (millis() - s_boot_ms < 5000) ? MODE_BOOT : MODE_NOMINAL;
+      hk.mission_phase = mission_phase();
+      hk.mission_countdown_s = mission_countdown_s();
+      hk.orientation = mission_orientation();
       wifi_get_status(hk.wifi_mode, hk.wifi_connected, hk.wifi_rssi, hk.ip, sizeof hk.ip);
       hk.panels_deployed = g_params.panels_deployed;
       hk.star_led = star_led_get();
@@ -118,6 +131,7 @@ void setup() {
   if (!camera_init()) LOGW("MAIN", "camera not present or failed to init (non-fatal, secondary payload)");
 
   sensors_task_start();
+  mission_task_start();
   console_task_start();
   wifi_task_start();
   web_task_start();

@@ -53,6 +53,9 @@ struct Housekeeping {
   float    cpu_temp_c;
   uint32_t fs_used, fs_total;
   uint8_t  mode;
+  uint8_t  mission_phase;     // MissionPhase from the sequencer
+  uint32_t mission_countdown_s;
+  uint8_t  orientation;       // Orientation from attitude_trigger.h
   uint8_t  wifi_mode;         // 0 off 1 sta 2 ap
   bool     wifi_connected;
   int8_t   wifi_rssi;

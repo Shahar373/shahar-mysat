@@ -6,6 +6,7 @@
 #include "crc.h"
 #include "params_def.h"
 #include "cmdline.h"
+#include "attitude_trigger.h"
 
 // ---------------------------------------------------------------- crc.h
 void test_crc8_known_vector() {
@@ -131,6 +132,92 @@ void test_legacy_alias_case_insensitive() {
   TEST_ASSERT_EQUAL_STRING("log start", line);
 }
 
+// ---------------------------------------------------------------- attitude_trigger.h
+// The satellite folds its solar panels based on these decisions, so they are worth proving
+// off-hardware. "Upright" is whatever orientation was learned, not a hard-coded axis.
+static const Vec3 UP  = { 0.0f, 0.0f, 1.0f };     // learned reference: +Z is up on this build
+static const Vec3 DOWN = { 0.0f, 0.0f, -1.0f };
+static const Vec3 SIDE = { 1.0f, 0.0f, 0.0f };
+
+void test_at_upright_matches_reference() {
+  TEST_ASSERT_EQUAL_INT(ORIENT_UPRIGHT, at_classify(UP, UP, true));
+}
+void test_at_inverted_is_opposite_reference() {
+  TEST_ASSERT_EQUAL_INT(ORIENT_INVERTED, at_classify(DOWN, UP, true));
+}
+void test_at_on_its_side_is_neither() {
+  TEST_ASSERT_EQUAL_INT(ORIENT_SIDEWAYS, at_classify(SIDE, UP, true));
+}
+void test_at_works_with_any_learned_axis() {
+  // the IMU's mounting is unknown, so a reference along -Y must behave exactly the same
+  Vec3 ref = { 0.0f, -1.0f, 0.0f };
+  Vec3 upright = { 0.05f, -0.99f, 0.02f };
+  Vec3 flipped = { 0.0f, 1.0f, 0.0f };
+  TEST_ASSERT_EQUAL_INT(ORIENT_UPRIGHT, at_classify(upright, ref, true));
+  TEST_ASSERT_EQUAL_INT(ORIENT_INVERTED, at_classify(flipped, ref, true));
+}
+void test_at_unknown_without_reference() {
+  TEST_ASSERT_EQUAL_INT(ORIENT_UNKNOWN, at_classify(UP, UP, false));
+}
+void test_at_tilted_45_degrees_still_reads_upright() {
+  Vec3 tilted = { 0.707f, 0.0f, 0.707f };          // cos = 0.707, above the 0.5 threshold
+  TEST_ASSERT_EQUAL_INT(ORIENT_UPRIGHT, at_classify(tilted, UP, true));
+}
+void test_at_settled_rejects_shaking() {
+  Vec3 shaken = { 0.0f, 0.0f, 1.9f };              // ~1.9 g: being moved, not resting
+  TEST_ASSERT_FALSE(at_is_settled(shaken, 1.0f));
+  TEST_ASSERT_TRUE(at_is_settled(UP, 1.0f));
+}
+void test_at_settled_rejects_tumbling() {
+  TEST_ASSERT_FALSE(at_is_settled(UP, 120.0f));    // 1 g but spinning fast
+}
+void test_at_orientation_cosine_signs() {
+  TEST_ASSERT_TRUE(at_orientation_cosine(UP, UP) > 0.99f);
+  TEST_ASSERT_TRUE(at_orientation_cosine(DOWN, UP) < -0.99f);
+}
+void test_debouncer_requires_hold_time() {
+  OrientationDebouncer d; d.reset(2.0f);
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 0.5f));   // first sighting: clock starts at zero
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 0.5f));   // 0.5 s held
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 0.5f));   // 1.0 s
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 0.5f));   // 1.5 s
+  TEST_ASSERT_TRUE(d.update(ORIENT_INVERTED, 0.5f));    // 2.0 s -> fires once
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 0.5f));   // stays put, no repeat
+}
+void test_debouncer_resets_on_flapping() {
+  OrientationDebouncer d; d.reset(2.0f);
+  d.update(ORIENT_INVERTED, 0.5f);
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 1.5f));   // 1.5 s of the 2 s accumulated
+  d.update(ORIENT_UPRIGHT, 0.25f);                      // a brief wobble throws it all away
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 1.5f));   // back to the first sighting
+  TEST_ASSERT_FALSE(d.update(ORIENT_INVERTED, 1.5f));   // 1.5 s again, still short
+  TEST_ASSERT_TRUE(d.update(ORIENT_INVERTED, 0.6f));    // 2.1 s -> fires
+}
+void test_debouncer_fires_on_each_new_state() {
+  OrientationDebouncer d; d.reset(1.0f);
+  d.update(ORIENT_UPRIGHT, 1.0f);                       // sighting
+  TEST_ASSERT_TRUE(d.update(ORIENT_UPRIGHT, 1.0f));     // held long enough -> deploy edge
+  d.update(ORIENT_INVERTED, 1.0f);
+  TEST_ASSERT_TRUE(d.update(ORIENT_INVERTED, 1.0f));    // -> stow edge
+  d.update(ORIENT_UPRIGHT, 1.0f);
+  TEST_ASSERT_TRUE(d.update(ORIENT_UPRIGHT, 1.0f));     // -> deploy edge again, repeatable demo
+}
+void test_params_mission_defaults_are_demo_friendly() {
+  Params p; params_set_defaults(p);
+  TEST_ASSERT_EQUAL_UINT16(10, p.deploy_inhibit_s);     // watchable on a desk, not the real 1800 s
+  TEST_ASSERT_EQUAL_UINT8(1, p.auto_deploy);
+  TEST_ASSERT_EQUAL_UINT8(1, p.stow_on_flip);
+  TEST_ASSERT_EQUAL_UINT8(0, p.up_ref_valid);           // nothing learned until it sits still
+}
+void test_params_mission_keys_are_settable() {
+  Params p; params_set_defaults(p);
+  const ParamDesc* d = params_find("mission.deploy_inhibit_s");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_TRUE(params_set_from_str(p, *d, "1800"));  // the real CubeSat inhibit
+  TEST_ASSERT_EQUAL_UINT16(1800, p.deploy_inhibit_s);
+  TEST_ASSERT_FALSE(params_set_from_str(p, *d, "99999"));
+}
+
 int main(int argc, char** argv) {
   (void)argc; (void)argv;
   UNITY_BEGIN();
@@ -154,5 +241,19 @@ int main(int argc, char** argv) {
   RUN_TEST(test_legacy_alias_rewrites_known_word);
   RUN_TEST(test_legacy_alias_ignores_modern_command);
   RUN_TEST(test_legacy_alias_case_insensitive);
+  RUN_TEST(test_at_upright_matches_reference);
+  RUN_TEST(test_at_inverted_is_opposite_reference);
+  RUN_TEST(test_at_on_its_side_is_neither);
+  RUN_TEST(test_at_works_with_any_learned_axis);
+  RUN_TEST(test_at_unknown_without_reference);
+  RUN_TEST(test_at_tilted_45_degrees_still_reads_upright);
+  RUN_TEST(test_at_settled_rejects_shaking);
+  RUN_TEST(test_at_settled_rejects_tumbling);
+  RUN_TEST(test_at_orientation_cosine_signs);
+  RUN_TEST(test_debouncer_requires_hold_time);
+  RUN_TEST(test_debouncer_resets_on_flapping);
+  RUN_TEST(test_debouncer_fires_on_each_new_state);
+  RUN_TEST(test_params_mission_defaults_are_demo_friendly);
+  RUN_TEST(test_params_mission_keys_are_settable);
   return UNITY_END();
 }

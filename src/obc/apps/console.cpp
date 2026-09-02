@@ -13,6 +13,8 @@
 #include "cmdline.h"
 #include "mysat_icd.h"
 #include "apps/wifi.h"
+#include "apps/mission.h"
+#include "attitude_trigger.h"
 #include <LittleFS.h>
 
 static uint32_t s_frame_counter = 0;
@@ -49,6 +51,9 @@ void console_print_telemetry_frame(Print& out) {
   print_att_line(out, tm.att);
   print_sun_line(out, tm.sun);
   print_pwr_line(out, tm.pwr);
+  char countdown[24] = "";
+  if (mission_countdown_s()) snprintf(countdown, sizeof countdown, "  deploy in %lus", (unsigned long)mission_countdown_s());
+  out.printf("  msn   %s%s  attitude=%s\n", mission_phase_str(), countdown, orientation_str(mission_orientation()));
   out.printf("  aux   %s  servo=%u  panels=%s\n", hk.aux_ok ? "ok" : "no link",
              hk.aux_ok ? hk.aux.servo_angle : 0, hk.panels_deployed ? "deployed" : "retracted");
   out.printf("  link  wifi=%s%s  ip=%s\n",
@@ -73,6 +78,11 @@ void console_print_help(Print& out) {
     "  status                        one telemetry frame now\n"
     "  solar deploy|retract|toggle   drive the wings via AUX\n"
     "  solar angle <0-180>           arbitrary servo angle (phase-1 tracking hook)\n"
+    "  mission status                phase, countdown, orientation, upright reference\n"
+    "  mission separate              trigger the launch sequence without a power cycle\n"
+    "  mission abort                 cancel a pending deployment\n"
+    "  mission learn-upright         record the current attitude as 'this way up'\n"
+    "  mission auto on|off           arm/disable the flip-to-stow triggers\n"
     "  led toggle|blink              STAR LED\n"
     "  imu calibrate                 3 s gyro-bias calibration (hold still)\n"
     "  imu align                     zero roll/pitch/yaw at the current attitude\n"
@@ -113,7 +123,9 @@ bool console_execute(const String& lineIn, Print& out) {
     else if (!strcasecmp(a1, "retract")) { aux_send(AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = 0; params_unlock(); params_save(); out.println(F("solar: retracting")); }
     else if (!strcasecmp(a1, "toggle")) { bool dep = !g_params.panels_deployed; aux_send(dep ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = dep; params_unlock(); params_save(); out.println(F("solar: toggled")); }
     else if (!strcasecmp(a1, "angle") && argc > 2) { uint8_t deg = atoi(a2); aux_send(AUX_CMD_SERVO_ANGLE, deg); out.printf("solar: angle -> %u\n", deg); }
-    else out.println(F("usage: solar deploy|retract|toggle|angle <deg>"));
+    else { out.println(F("usage: solar deploy|retract|toggle|angle <deg>")); return true; }
+    mission_note_manual_actuation();   // a human is driving: stop the automatic flip triggers
+    out.println(F("(automatic orientation triggers suspended, re-arm with 'mission auto on')"));
     events_post(EV_MOTOR, g_params.panels_deployed, "solar %s", a1);
     return true;
   }
@@ -187,6 +199,16 @@ bool console_execute(const String& lineIn, Print& out) {
     else if (!strcasecmp(a1, "at")) { aux_send(AUX_CMD_RF_SET, 1); out.println(F("radio: AT mode on (auto-exits after 60s)")); }
     else if (!strcasecmp(a1, "power") && argc > 2) { aux_send(AUX_CMD_RF_POWER, !strcasecmp(a2, "on")); out.println(F("radio: power set")); }
     else out.println(F("usage: radio at [on|off] | radio power on|off"));
+    return true;
+  }
+
+  if (!strcmp(cmd, "mission")) {
+    if (argc == 1 || !strcasecmp(a1, "status")) { mission_status(out); }
+    else if (!strcasecmp(a1, "separate")) { mission_trigger_separation(); out.println(F("mission: separation triggered")); }
+    else if (!strcasecmp(a1, "abort")) { mission_abort(); out.println(F("mission: pending deployment aborted")); }
+    else if (!strcasecmp(a1, "learn-upright") || !strcasecmp(a1, "learn")) { mission_learn_upright(); out.println(F("mission: upright reference recorded")); }
+    else if (!strcasecmp(a1, "auto") && argc > 2) { mission_set_auto(!strcasecmp(a2, "on")); out.printf("mission: automatic triggers %s\n", mission_auto_enabled() ? "armed" : "disabled"); }
+    else out.println(F("usage: mission status|separate|abort|learn-upright|auto on|off"));
     return true;
   }
 

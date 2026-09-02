@@ -9,7 +9,7 @@
 #include "crc.h"
 
 #define PARAMS_MAGIC   0x4D595341u   // 'MYSA'
-#define PARAMS_VERSION 1
+#define PARAMS_VERSION 2
 
 struct __attribute__((packed)) Params {
   uint32_t magic;
@@ -51,10 +51,17 @@ struct __attribute__((packed)) Params {
   uint16_t battery_capacity_mah;
   uint8_t  ina_vbus_correction;   // 1 = add I*Rshunt to the bus reading (bus is sensed after the shunt)
 
-  // mission (phase-1 hooks, stored now so the layout is stable)
-  uint16_t deploy_inhibit_s;
-  uint16_t rf_inhibit_s;
-  uint8_t  demo_time_scale;       // 1 = real time; N = inhibit timers run N times faster
+  // mission sequencer (see apps/mission.cpp)
+  uint16_t deploy_inhibit_s;      // seconds from "separation" to automatic deployment.
+                                  // Real CubeSats are required to wait 1800 s; the demo default
+                                  // is short so the sequence is watchable on a desk.
+  uint8_t  auto_deploy;           // 1 = deploy automatically after separation
+  uint8_t  stow_on_flip;          // 1 = retract the panels when turned upside down
+  uint8_t  deploy_on_upright;     // 1 = deploy again when turned back upright
+  uint8_t  flip_hold_s;           // an orientation must persist this long before it counts
+  uint8_t  actuation_gap_s;       // minimum seconds between two servo commands
+  uint8_t  up_ref_valid;          // 1 = up_ref holds a learned "this way up" vector
+  float    up_ref[3];             // accelerometer vector recorded while sitting upright and still
   float    gs_lat;
   float    gs_lon;
   uint32_t launch_epoch;          // unix seconds of "separation", 0 = not launched
@@ -89,9 +96,13 @@ static inline void params_set_defaults(Params& p) {
   p.imu_calibrated = 0;
   p.battery_capacity_mah = 2600;         // typical 18650; user to confirm
   p.ina_vbus_correction = 1;
-  p.deploy_inhibit_s = 1800;
-  p.rf_inhibit_s = 2700;
-  p.demo_time_scale = 60;                // demos: 30 min inhibit becomes 30 s
+  p.deploy_inhibit_s = 10;               // demo-friendly; set 1800 for the real CubeSat rule
+  p.auto_deploy = 1;
+  p.stow_on_flip = 1;
+  p.deploy_on_upright = 1;
+  p.flip_hold_s = 2;
+  p.actuation_gap_s = 5;
+  p.up_ref_valid = 0;
   p.gs_lat = 32.08f; p.gs_lon = 34.78f;  // Israel center default, until the user sets it
   p.launch_epoch = 0;
 }
@@ -144,13 +155,19 @@ static inline bool params_sanitize(Params& p) {
   PARAMS_CLAMP_FIELD(p, battery_capacity_mah, uint16_t, 500, 10000);
   PARAMS_CLAMP_FIELD(p, ina_vbus_correction, uint8_t, 0, 1);
   PARAMS_CLAMP_FIELD(p, deploy_inhibit_s, uint16_t, 0, 7200);
-  PARAMS_CLAMP_FIELD(p, rf_inhibit_s, uint16_t, 0, 7200);
-  PARAMS_CLAMP_FIELD(p, demo_time_scale, uint8_t, 1, 255);
+  PARAMS_CLAMP_FIELD(p, auto_deploy, uint8_t, 0, 1);
+  PARAMS_CLAMP_FIELD(p, stow_on_flip, uint8_t, 0, 1);
+  PARAMS_CLAMP_FIELD(p, deploy_on_upright, uint8_t, 0, 1);
+  PARAMS_CLAMP_FIELD(p, flip_hold_s, uint8_t, 1, 60);
+  PARAMS_CLAMP_FIELD(p, actuation_gap_s, uint8_t, 1, 120);
+  PARAMS_CLAMP_FIELD(p, up_ref_valid, uint8_t, 0, 1);
   PARAMS_CLAMP_FIELD(p, gs_lat, float, -90.f, 90.f);
   PARAMS_CLAMP_FIELD(p, gs_lon, float, -180.f, 180.f);
   for (int i = 0; i < 3; i++) {
     float v = p.att_offset[i];
     if (!(v == v)) { p.att_offset[i] = 0; changed = true; }  // NaN guard
+    float u = p.up_ref[i];
+    if (!(u == u)) { p.up_ref[i] = 0; p.up_ref_valid = 0; changed = true; }
   }
   return changed;
 }
@@ -191,8 +208,12 @@ static const ParamDesc PARAM_TABLE[] = {
   PD("batt.capacity_mah",   battery_capacity_mah, PT_U16, 500, 10000),
   PD("ina.vbus_corr",       ina_vbus_correction, PT_U8, 0, 1),
   PD("mission.deploy_inhibit_s", deploy_inhibit_s, PT_U16, 0, 7200),
-  PD("mission.rf_inhibit_s",     rf_inhibit_s, PT_U16, 0, 7200),
-  PD("mission.time_scale",       demo_time_scale, PT_U8, 1, 255),
+  PD("mission.auto_deploy",      auto_deploy, PT_U8, 0, 1),
+  PD("mission.stow_on_flip",     stow_on_flip, PT_U8, 0, 1),
+  PD("mission.deploy_on_upright", deploy_on_upright, PT_U8, 0, 1),
+  PD("mission.flip_hold_s",      flip_hold_s, PT_U8, 1, 60),
+  PD("mission.actuation_gap_s",  actuation_gap_s, PT_U8, 1, 120),
+  PD("imu.up_ref_valid",         up_ref_valid, PT_U8, 0, 1),
   PD("gs.lat",              gs_lat, PT_F32, -90, 90),
   PD("gs.lon",              gs_lon, PT_F32, -180, 180),
   PD("mission.launch_epoch", launch_epoch, PT_U32, 0, 4294967295.f),

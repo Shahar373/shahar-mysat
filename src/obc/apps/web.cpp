@@ -10,6 +10,8 @@
 #include "core/params_store.h"
 #include "hal/leds.h"
 #include "hal/nano_link.h"
+#include "apps/mission.h"
+#include "attitude_trigger.h"
 #include <WebServer.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
@@ -57,6 +59,12 @@ static void handle_hk() {
   doc["heap_free"] = hk.heap_free; doc["heap_min"] = hk.heap_min; doc["psram_free"] = hk.psram_free;
   doc["cpu_temp_c"] = hk.cpu_temp_c; doc["fs_used"] = hk.fs_used; doc["fs_total"] = hk.fs_total;
   doc["mode"] = hk.mode; doc["callsign"] = g_params.callsign;
+  JsonObject ms = doc.createNestedObject("mission");
+  ms["phase"] = mission_phase_str();
+  ms["countdown_s"] = hk.mission_countdown_s;
+  ms["orientation"] = orientation_str(hk.orientation);
+  ms["auto"] = mission_auto_enabled();
+  ms["upright_ref"] = (bool)g_params.up_ref_valid;
   doc["wifi"]["mode"] = hk.wifi_mode; doc["wifi"]["connected"] = hk.wifi_connected;
   doc["wifi"]["rssi"] = hk.wifi_rssi; doc["wifi"]["ip"] = hk.ip;
   doc["aux"]["present"] = hk.aux_ok;

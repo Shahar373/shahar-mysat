@@ -9,6 +9,9 @@ enum LedState : uint8_t {
   LED_AP_MODE,         // amber solid: serving our own access point
   LED_FAULT,           // red double blink: a sensor is isolated or params were restored
   LED_SAFE,            // red slow breathing (phase 1)
+  LED_LEOP,            // amber breathing: separation seen, counting down to deployment
+  LED_DEPLOY,          // fast amber blink: the servo is moving the panels
+  LED_STOWED,          // magenta slow blink: panels folded after being turned over
   LED_ACTIVITY,        // short cyan flash on command / photo, then back to previous
 };
 

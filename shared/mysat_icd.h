@@ -92,4 +92,24 @@ enum EventCode : uint16_t {
   EV_WDT = 110,
   EV_LOG_WARN = 120,
   EV_LOG_ERROR = 121,
+  // mission sequencer
+  EV_SEPARATION = 130,          // the launch pin was pulled (power-on) or a manual separation
+  EV_DEPLOY_START = 131,
+  EV_DEPLOY_CONFIRMED = 132,    // AUX reported the servo reached the open angle
+  EV_DEPLOY_UNCONFIRMED = 133,  // command sent, but AUX could not confirm it
+  EV_STOW = 134,                // panels retracted (turned upside down, or commanded)
+  EV_ORIENTATION = 135,
+  EV_UPREF_LEARNED = 136,       // "this way up" reference vector captured
+  EV_PHASE = 137,
+};
+
+// Mission sequencer phases (apps/mission.cpp)
+enum MissionPhase : uint8_t {
+  MPHASE_BOOT = 0,       // subsystems still coming up
+  MPHASE_PRELAUNCH = 1,  // powered, but no separation seen (e.g. after a software reboot)
+  MPHASE_LEOP = 2,       // separation detected, counting down to deployment
+  MPHASE_DEPLOYING = 3,  // servo commanded, waiting for confirmation
+  MPHASE_NOMINAL = 4,    // panels deployed
+  MPHASE_STOWED = 5,     // panels retracted after being turned upside down
+  MPHASE_MANUAL = 6,     // operator drove the panels by hand; automatic triggers suspended
 };

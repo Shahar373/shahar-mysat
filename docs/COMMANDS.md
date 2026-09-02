@@ -25,6 +25,19 @@ rather than being silently ignored.
 | `solar toggle` | flip whichever state they're currently commanded to |
 | `solar angle <0-180>` | arbitrary servo angle — the mechanism holds intermediate positions, so this is the hook for a future sun-tracking array drive |
 
+## Mission sequencer
+
+| Command | Effect |
+|---|---|
+| `mission status` | phase, countdown, current orientation, learned upright reference, mission elapsed time |
+| `mission separate` | run the launch sequence now, without power-cycling — the demo shortcut |
+| `mission abort` | cancel a pending deployment during the countdown |
+| `mission learn-upright` | record the satellite's current attitude as "this way up" |
+| `mission auto on\|off` | arm or disable the flip-to-stow / upright-to-deploy triggers |
+
+Driving the panels by hand (`solar deploy`, `solar retract`, `solar angle`) automatically suspends
+the orientation triggers so the servo never fights you; `mission auto on` re-arms them.
+
 ## LEDs
 
 | Command | Effect |
@@ -32,10 +45,18 @@ rather than being silently ignored.
 | `led toggle` | STAR LED on/off |
 | `led blink` | 3-blink test pattern, then restores the previous state |
 
-The SIGNAL LED (NeoPixel) is not manually commandable — it always shows system status: white
-breathing at boot, green heartbeat once nominal, blue slow-blink while a WiFi station connection is
-down, amber solid while serving its own access point, red double-blink if any sensor has been
-isolated by FDIR.
+The SIGNAL LED (NeoPixel) is not manually commandable — it always shows system status:
+
+| Pattern | Meaning |
+|---|---|
+| white breathing | booting, subsystems still coming up |
+| amber breathing | LEOP: separation detected, counting down to deployment |
+| fast amber blink | the servo is moving the panels |
+| green heartbeat | nominal, panels deployed |
+| magenta slow blink | stowed after being turned upside down |
+| blue slow blink | WiFi station configured but not connected |
+| amber solid | serving its own access point |
+| red double blink | a sensor has been isolated by FDIR |
 
 ## Attitude
 
@@ -130,3 +151,25 @@ equivalent before dispatch (see `LEGACY_ALIASES` in `shared/cmdline.h`).
 Two stock commands don't have a direct equivalent because the interaction model changed:
 `SetWIFI` and `SetCallSign` used to prompt you for input; use `wifi mode/ssid/pass` and `callsign
 <name>` instead. `ChangeTime`'s interactive prompt is now `time set <ISO8601>`.
+
+
+## Mission parameters worth knowing
+
+| Key | Default | What it does |
+|---|---|---|
+| `mission.deploy_inhibit_s` | `10` | seconds from separation to deployment. Real CubeSats must wait 1800 s; set `0` for an instant deploy, `1800` for the real rule |
+| `mission.auto_deploy` | `1` | deploy automatically when the launch pin is pulled |
+| `mission.stow_on_flip` | `1` | fold the panels when the satellite is turned upside down |
+| `mission.deploy_on_upright` | `1` | deploy again when it is turned back upright |
+| `mission.flip_hold_s` | `2` | how long an orientation must hold before it counts (stops a wave of the hand from folding the panels) |
+| `mission.actuation_gap_s` | `5` | minimum seconds between two servo movements, to protect the mechanism |
+| `imu.up_ref_valid` | `0` | becomes `1` once the satellite has learned which way is up |
+
+Example: make the sequence behave like a real CubeSat launch, with a 30-minute inhibit and no
+orientation triggers at all:
+
+```
+params set mission.deploy_inhibit_s 1800
+params set mission.stow_on_flip 0
+params set mission.deploy_on_upright 0
+```
