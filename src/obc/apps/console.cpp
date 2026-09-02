@@ -16,6 +16,7 @@
 #include "apps/mission.h"
 #include "attitude_trigger.h"
 #include <LittleFS.h>
+#include <strings.h>
 
 static uint32_t s_frame_counter = 0;
 

@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include <esp_task_wdt.h>
 #include <esp_system.h>
+#include <string.h>
 
 #define BB_MAGIC 0xB1ACB0C5u
 RTC_NOINIT_ATTR static BlackBox s_bb;

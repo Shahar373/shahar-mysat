@@ -1,6 +1,7 @@
 #include "core/bus.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <string.h>
 
 static SemaphoreHandle_t s_tlock, s_hlock;
 static Telemetry s_tm;

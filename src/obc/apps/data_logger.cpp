@@ -4,6 +4,7 @@
 #include "core/events.h"
 #include "core/mission_clock.h"
 #include <LittleFS.h>
+#include <math.h>
 
 static const uint32_t MAX_TOTAL_ROWS = 20000;      // ~4.5 days at 20 s period before oldest-file rotation
 static const uint32_t HOUR_MS = 3600000UL;

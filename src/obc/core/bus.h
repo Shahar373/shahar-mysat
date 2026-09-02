@@ -2,6 +2,7 @@
 #pragma once
 #include <Arduino.h>
 #include "mysat_icd.h"
+#include <time.h>
 
 struct EnvData {
   bool  valid;
