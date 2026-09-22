@@ -33,9 +33,11 @@ enum AuxCmd : uint8_t {
 };
 
 // Servo timing, shared so the OBC can pace its commands to what the AUX actually does.
-// The AUX powers the servo for AUX_SERVO_POWER_MS per movement and refuses to start a new
-// movement while one is running, so a command sent sooner than AUX_SERVO_MIN_CMD_GAP_MS after the
-// previous one only retargets the sweep in progress -- it does not produce a second sweep.
+// The AUX detaches the servo as soon as the commanded angle is reached (a full sweep takes about
+// 1.6 s) and never powers it longer than AUX_SERVO_POWER_MS -- that ceiling is the stall protection
+// for a blocked mechanism. It refuses to start a new movement while one is running, so a command
+// sent sooner than AUX_SERVO_MIN_CMD_GAP_MS after the previous one only retargets the sweep in
+// progress; it does not produce a second sweep. Pacing therefore has to assume the ceiling.
 #define AUX_SERVO_STEP_MS         10    // ms per degree while sweeping
 #define AUX_SERVO_POWER_MS        2200  // servo power window per movement (stall protection)
 #define AUX_SERVO_MIN_CMD_GAP_MS  2400  // power window plus one AUX loop pass to detach

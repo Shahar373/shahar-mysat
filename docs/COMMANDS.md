@@ -76,9 +76,11 @@ deliberate, since stopping half way is worse for the mechanism than finishing th
 
 The default show takes about 29 seconds. `demo plan` prints the resulting timeline and the closest
 spacing between two servo commands, which the firmware will not let you set below
-`AUX_SERVO_MIN_CMD_GAP_MS` (2400 ms): the AUX controller powers the servo for 2.2 s per movement
-and ignores a new one while a sweep is running, so a faster schedule would give you one
-half-finished sweep instead of two. Out-of-range values are clamped on load rather than obeyed.
+`AUX_SERVO_MIN_CMD_GAP_MS` (2400 ms): the AUX controller detaches the servo once the commanded
+angle is reached (about 1.6 s for a full sweep) but keeps it powered for up to 2.2 s if the
+mechanism blocks it, and it ignores a new movement while a sweep is running -- so a faster schedule
+would give you one half-finished sweep instead of two whenever a sweep runs long. Out-of-range
+values are clamped on load rather than obeyed.
 
 The front light is the STAR LED on GPIO14 -- the white PWM LED on the camera face, the same one
 `led toggle` drives.

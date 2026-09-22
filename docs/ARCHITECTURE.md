@@ -187,9 +187,10 @@ Three things make this more than a list of delays:
   timed steps, which lets a host test assert the properties that matter -- two wing cycles, three
   three-second flashes, the light never left on at the end, and above all that no two servo
   commands are closer together than the AUX controller can carry out.
-- **The servo spacing is a checked invariant, not a comment.** The AUX powers the servo for
-  `AUX_SERVO_POWER_MS` and ignores a new movement while a sweep is running, so a command sent too
-  early only retargets the sweep in progress. That constant now lives in the ICD, both firmwares
+- **The servo spacing is a checked invariant, not a comment.** The AUX detaches the servo when
+  the commanded angle is reached, powers it for at most `AUX_SERVO_POWER_MS` if the mechanism
+  blocks it, and ignores a new movement while a sweep is running, so a command sent too early only
+  retargets the sweep in progress. That constant now lives in the ICD, both firmwares
   use it, `demo_cfg_sanitize()` enforces it on every load and `params set`, and
   `demo_min_servo_gap_ms()` is what the test asserts on.
 - **The mission sequencer holds the phase for the whole show.** `MPHASE_DEMO` is what keeps the

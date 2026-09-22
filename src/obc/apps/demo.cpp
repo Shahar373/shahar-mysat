@@ -97,17 +97,17 @@ static void enter_step(int i) {
   const DemoStep& s = s_steps[i];
   switch (s.kind) {
     case DEMO_STEP_PANEL_OPEN:
-      aux_send(AUX_CMD_MOTOR_OPEN, 0);
-      s_panels_out = true; s_moves_done++;
+    case DEMO_STEP_PANEL_CLOSE: {
+      bool open = (s.kind == DEMO_STEP_PANEL_OPEN);
+      aux_send(open ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0);
+      s_panels_out = open; s_moves_done++;
+      // Mirror the wing state into the live table (RAM only, no NVS write until finish()) so the
+      // telemetry frame and the dashboard tell the truth while the show is running.
+      params_lock(); g_params.panels_deployed = open ? 1 : 0; params_unlock();
       mission_note_actuation();
-      LOGI("DEMO", "cycle %u: wings out", s.index);
+      LOGI("DEMO", "cycle %u: wings %s", s.index, open ? "out" : "in");
       break;
-    case DEMO_STEP_PANEL_CLOSE:
-      aux_send(AUX_CMD_MOTOR_CLOSE, 0);
-      s_panels_out = false; s_moves_done++;
-      mission_note_actuation();
-      LOGI("DEMO", "cycle %u: wings in", s.index);
-      break;
+    }
     case DEMO_STEP_LIGHT_ON:
       star_led_set(true);
       LOGI("DEMO", "flash %u of %u: front light on for %u ms", s.index, s_cfg.light_flashes, s_cfg.light_on_ms);

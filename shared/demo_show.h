@@ -9,9 +9,9 @@
 // runner that actually drives the servo and the light is src/obc/apps/demo.cpp.
 //
 // Why a schedule rather than a chain of delays: a servo movement has a hardware constraint behind
-// it. The AUX controller powers the servo for AUX_SERVO_POWER_MS and ignores a new movement while
-// one is still running (see src/aux/main.cpp), so two commands sent too close together produce a
-// half-finished sweep instead of two sweeps. Expressed as a list of steps that constraint becomes
+// it. The AUX controller powers the servo for up to AUX_SERVO_POWER_MS and ignores a new movement
+// while one is still running (see src/aux/main.cpp), so two commands sent too close together
+// produce a half-finished sweep instead of two sweeps. Expressed as a list of steps that constraint becomes
 // a property a test can check -- demo_min_servo_gap_ms() -- instead of a comment nobody re-reads.
 #pragma once
 #include <stdint.h>
