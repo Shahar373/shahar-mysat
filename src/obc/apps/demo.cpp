@@ -30,6 +30,8 @@ static uint8_t     s_moves_done = 0;      // servo sweeps issued in this run
 static uint8_t     s_moves_confirmed = 0; // ... of which the AUX reported the expected angle
 static bool        s_panels_out = false;  // what the show believes the wings are doing
 static uint32_t    s_last_servo_ms = 0;   // when the last wing command went out (valid if s_moves_done)
+static uint8_t     s_last_target_deg = 0; // angle the last wing command asked for
+static bool        s_readback_warned = false;
 
 // Rebuilds the schedule from the parameter table. Cheap, so it runs at every start: editing
 // `demo.*` with `params set` takes effect on the next show without a reboot.
@@ -59,7 +61,13 @@ uint32_t demo_remaining_s() {
 // AUX still reports the commanded angle. The panel current in the telemetry frame is the other
 // half of the story, which is why it is logged next to it.
 static void confirm_move(uint8_t kind, uint8_t index) {
-  uint8_t want = (kind == DEMO_STEP_PANEL_OPEN) ? g_params.servo_open_angle : g_params.servo_closed_angle;
+  uint8_t want = s_last_target_deg;
+  if (!aux_has_readback()) {
+    // The stock Nano firmware has no status readback at all, so there is nothing to confirm
+    // against. Said once per show rather than once per sweep.
+    if (!s_readback_warned) { LOGI("DEMO", "AUX is the stock firmware: wing moves cannot be confirmed"); s_readback_warned = true; }
+    return;
+  }
   AuxStatus st;
   if (!aux_read_status(st)) {
     LOGW("DEMO", "move %u (%s): no status readback from AUX", index, demo_step_str(kind));
@@ -77,7 +85,7 @@ static void confirm_move(uint8_t kind, uint8_t index) {
 }
 
 static void finish(const char* reason) {
-  star_led_set(false);
+  star_led_fade(false, g_params.demo_fade_ms);
   s_running = false;
   s_cur = -1;
   s_runs++;
@@ -87,10 +95,17 @@ static void finish(const char* reason) {
   params_save();
   Telemetry tm; telemetry_get(tm);
   float panel_ma = tm.pwr.valid ? (tm.pwr.panel_left_ma + tm.pwr.panel_right_ma) : 0.0f;
-  events_post(EV_DEMO, (int32_t)s_moves_confirmed, "demo show %s: %u/%u moves confirmed, wings %s, panels %.1f mA",
-              reason, s_moves_confirmed, s_moves_done, s_panels_out ? "out" : "in", panel_ma);
-  LOGI("DEMO", "show %s -- %u of %u servo moves confirmed, wings %s",
-       reason, s_moves_confirmed, s_moves_done, s_panels_out ? "out" : "in");
+  if (aux_has_readback()) {
+    events_post(EV_DEMO, (int32_t)s_moves_confirmed, "demo show %s: %u/%u moves confirmed, wings %s, panels %.1f mA",
+                reason, s_moves_confirmed, s_moves_done, s_panels_out ? "out" : "in", panel_ma);
+    LOGI("DEMO", "show %s -- %u of %u servo moves confirmed, wings %s",
+         reason, s_moves_confirmed, s_moves_done, s_panels_out ? "out" : "in");
+  } else {
+    events_post(EV_DEMO, (int32_t)s_moves_done, "demo show %s: %u moves sent (stock AUX, unconfirmed), wings %s, panels %.1f mA",
+                reason, s_moves_done, s_panels_out ? "out" : "in", panel_ma);
+    LOGI("DEMO", "show %s -- %u servo moves sent, unconfirmed (stock AUX), wings %s",
+         reason, s_moves_done, s_panels_out ? "out" : "in");
+  }
 }
 
 static void enter_step(int i) {
@@ -100,8 +115,19 @@ static void enter_step(int i) {
     case DEMO_STEP_PANEL_OPEN:
     case DEMO_STEP_PANEL_CLOSE: {
       bool open = (s.kind == DEMO_STEP_PANEL_OPEN);
-      if (!aux_send(open ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0))
-        LOGW("DEMO", "cycle %u: AUX did not acknowledge the wing command, the wings will not move", s.index);
+      bool sent;
+      if (aux_has_readback()) {
+        // v2 AUX: ask for an angle a few degrees short of the end stops (demo.open_deg /
+        // demo.closed_deg), so the servo reaches its target and is switched off instead of
+        // stalling against the mechanism until the power cut-off.
+        s_last_target_deg = open ? g_params.demo_open_deg : g_params.demo_closed_deg;
+        sent = aux_send(AUX_CMD_SERVO_ANGLE, s_last_target_deg);
+      } else {
+        // stock AUX: a full sweep is the only movement it knows
+        s_last_target_deg = open ? g_params.servo_open_angle : g_params.servo_closed_angle;
+        sent = aux_send(open ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0);
+      }
+      if (!sent) LOGW("DEMO", "cycle %u: AUX did not acknowledge the wing command, the wings will not move", s.index);
       s_last_servo_ms = millis();
       s_panels_out = open; s_moves_done++;
       // Mirror the wing state into the live table (RAM only, no NVS write until finish()) so the
@@ -112,11 +138,11 @@ static void enter_step(int i) {
       break;
     }
     case DEMO_STEP_LIGHT_ON:
-      star_led_set(true);
+      star_led_fade(true, g_params.demo_fade_ms);
       LOGI("DEMO", "flash %u of %u: front light on for %u ms", s.index, s_cfg.light_flashes, s_cfg.light_on_ms);
       break;
     case DEMO_STEP_LIGHT_OFF:
-      star_led_set(false);
+      star_led_fade(false, g_params.demo_fade_ms);
       break;
     default:
       break;
@@ -134,9 +160,12 @@ bool demo_start(const char* reason) {
   s_cur = -1;
   s_moves_done = 0;
   s_moves_confirmed = 0;
+  s_readback_warned = false;
   s_panels_out = g_params.panels_deployed != 0;
   star_led_cancel_blink();
   star_led_set(false);
+  // Decide now which Nano firmware is on the bus, so even the first sweep is sent the right way.
+  aux_probe();
 
   uint32_t total = demo_total_ms(s_steps, s_nsteps);
   events_post(EV_DEMO, (int32_t)(total / 1000), "demo show started (%s): %ux wings, %ux light, %lus",
@@ -214,5 +243,7 @@ void demo_status(Print& out) {
     out.printf("moves so far    : %u issued, %u confirmed\n", s_moves_done, s_moves_confirmed);
   }
   out.printf("shows this boot : %lu\n", (unsigned long)s_runs);
+  out.printf("AUX firmware    : %s%s\n", aux_protocol_str(),
+             aux_has_readback() ? "" : " -- full sweeps only, no confirmation; flash src/aux for both");
   demo_print_plan(out);
 }

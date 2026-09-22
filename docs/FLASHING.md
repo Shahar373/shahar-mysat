@@ -31,7 +31,8 @@ pio run -e obc -t uploadfs      # uploads data/index.html to LittleFS — do thi
 pio device monitor -e obc
 ```
 
-**Arduino Nano (`aux`)** flashes over its own USB port:
+**Arduino Nano (`aux`)** flashes over its own USB port, and is optional at first -- see "Which
+Nano firmware you have" below:
 
 ```
 pio run -e aux -t upload
@@ -72,6 +73,19 @@ some environments, including the sandbox this project started in; they pull only
 release assets and PyPI. With normal internet access `pio run` and `pio test` are the more
 convenient day-to-day commands and do the same thing.
 
+## Which Nano firmware you have matters less than it used to
+
+The OBC probes the Nano at boot. If it answers a status read it is the v2 firmware from `src/aux/`
+and the full protocol is used. If it does not, it is the firmware the kit ships with, and the OBC
+switches to that firmware's single-byte commands: wings open and close still work, arbitrary
+angles, the heartbeat and the position readback do not, and the console says
+`stock firmware, no readback`. That means you can flash the ESP32-CAM first and see everything
+work before touching the Nano. Flash the Nano when convenient; the OBC notices on the next boot.
+
+The one thing the OBC never does is send its framed commands to the stock firmware: that firmware
+keeps only the last byte of a message, which for a frame is its checksum, and for two checksum
+values it would read that as a wing command.
+
 ## Running the demonstration show instead
 
 If what you want on the bench is the show — wings out and back twice, then the front light on for
@@ -110,6 +124,9 @@ within those 10 seconds.
 The boot banner prints the reset reason it saw (`POWERON`, `SOFTWARE`, `TASK_WDT`, ...). If after
 an upload it reports something other than `POWERON`, the automatic sequence will not have run --
 pull the power pin for a genuine cold start, or use `mission separate`.
+
+A step-by-step walkthrough of all of the above for a first-time flasher, in Hebrew, is in
+`docs/INSTALL.he.md`.
 
 ## First boot checklist
 

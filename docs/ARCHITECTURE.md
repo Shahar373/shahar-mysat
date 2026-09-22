@@ -78,6 +78,14 @@ you'll `pio run` instead of clicking Verify in the Arduino IDE — the extension
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+**The OBC speaks whichever protocol the Nano understands.** A status read that answers with a
+valid frame means the v2 firmware; one that does not means the firmware the kit ships with. In the
+second case `aux_send()` maps each command to that firmware's single byte where one exists (wings
+open, wings close, radio AT mode) and drops the rest, and a legacy verdict is upgraded the moment a
+later read answers. The mapping and the reason for it are in the ICD (`aux_legacy_equivalent`) and
+covered by host tests, because the stock firmware keeps only the last byte of a message: a framed
+command reaching it is either ignored or, for two checksum values, misread as a wing command.
+
 `shared/` is compiled into all three targets (`obc`, `aux`, `native`) and must stay free of
 Arduino/FreeRTOS types:
 - `mysat_icd.h` — the interface control document: AUX command/status wire format, mission mode and
@@ -173,9 +181,10 @@ the show rather than the launch sequence above.
           |  5 s arming hold (put the cube down, step back), cyan LED
           v
    wings out -> wings in, twice           each sweep 2.6 s + 0.4 s of rest, amber LED
-          |                               every sweep's end angle is read back from the AUX
+          |                               v2 AUX: to 15 / 165 deg, no stall, end angle read back
+          |                               stock AUX: full sweeps, nothing read back
           v
-   front light on 3 s, off 1 s, 3x        STAR LED on GPIO14
+   front light on 3 s, off 1 s, 3x        STAR LED on GPIO14, 300 ms ramps
           |
           v
    [NOMINAL] or [STOWED] depending on where the wings ended  (30.5 s in total)
@@ -245,7 +254,7 @@ release assets only, no PlatformIO or Arduino package registry):
 | Target | How it is verified | Result |
 |---|---|---|
 | `aux` (Nano) | `tools/build_aux.sh` — real avr-gcc against ArduinoCore-avr 1.8.6 + Servo | links, 6736 B flash / 499 B RAM |
-| `native` (host) | `tools/run_native_tests.sh` — plain g++ | 52 tests pass |
+| `native` (host) | `tools/run_native_tests.sh` — plain g++ | 57 tests pass |
 | `obc` (ESP32-CAM) | `tools/build_obc.sh` — arduino-cli against Arduino-ESP32 2.0.17 and the xtensa-esp32-elf 8.4.0 toolchain | links, 1 057 585 B (33% of the huge_app slot), 55 160 B static RAM |
 
 The ESP32 target was written before it could be compiled — the sandbox this repository was

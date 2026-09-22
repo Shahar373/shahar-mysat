@@ -39,15 +39,20 @@ static uint32_t s_boot_ms;
 // to see from across the room.
 static uint8_t current_led_state() {
   for (int i = 0; i < DEV_COUNT; i++) if (fdir_dev((DeviceId)i).failed) return LED_FAULT;
+  // During the demonstration show the light says which act is running -- a tick per second while
+  // it counts down, amber while the wings move, cyan otherwise -- so a visitor can read the
+  // routine without the console. It outranks the boot animation because the countdown starts
+  // inside the boot window when the show is armed on the launch pin.
+  if (mission_phase() == MPHASE_DEMO) {
+    uint8_t k = demo_step_kind();
+    if (k == DEMO_STEP_ARM) return LED_DEMO_ARM;
+    return demo_step_moves_servo(k) ? LED_DEPLOY : LED_DEMO;
+  }
   if (millis() - s_boot_ms < 5000) return LED_BOOT;
   switch (mission_phase()) {
     case MPHASE_LEOP: return LED_LEOP;
     case MPHASE_DEPLOYING: return LED_DEPLOY;
     case MPHASE_STOWED: return LED_STOWED;
-    // During the demonstration show the light says which act is running: amber while the wings
-    // move, cyan otherwise, so a visitor can read the routine without watching the console.
-    case MPHASE_DEMO:
-      return demo_step_moves_servo(demo_step_kind()) ? LED_DEPLOY : LED_DEMO;
     default: break;
   }
   uint8_t mode; bool connected; int8_t rssi; char ip[16];

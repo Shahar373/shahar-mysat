@@ -75,6 +75,7 @@ static void handle_hk() {
   doc["wifi"]["mode"] = hk.wifi_mode; doc["wifi"]["connected"] = hk.wifi_connected;
   doc["wifi"]["rssi"] = hk.wifi_rssi; doc["wifi"]["ip"] = hk.ip;
   doc["aux"]["present"] = hk.aux_ok;
+  doc["aux"]["protocol"] = aux_protocol_str();
   if (hk.aux_ok) {
     doc["aux"]["servo_angle"] = hk.aux.servo_angle; doc["aux"]["servo_state"] = hk.aux.servo_state;
     doc["aux"]["hb_age_s"] = hk.aux.hb_age_s; doc["aux"]["boot_flags"] = hk.aux.boot_flags;

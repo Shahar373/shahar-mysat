@@ -12,7 +12,7 @@ Baseline is the stock [MySatKit-Firmware v1.4.1](https://github.com/MySatKit/MyS
 | Piece | State |
 |---|---|
 | `src/aux/` — Nano auxiliary firmware v2 | **compiled and linked** with a real avr-gcc build (`tools/build_aux.sh`), 6.7 KB flash |
-| `shared/` — portable core (CRC, parameter table, command tokenizer, orientation triggers, show schedule, ICD) | **52/52 unit tests pass** (`tools/run_native_tests.sh`) |
+| `shared/` — portable core (CRC, parameter table, command tokenizer, orientation triggers, show schedule, ICD) | **57/57 unit tests pass** (`tools/run_native_tests.sh`) |
 | `src/obc/` — ESP32-CAM main firmware v2 | **compiled and linked** against Arduino-ESP32 2.0.17 (`tools/build_obc.sh`), 1.06 MB of the 3 MB app slot |
 | Deployment sequencer (pull pin → deploy, flip → stow) | written, trigger maths covered by unit tests |
 | Demonstration show (pull pin → wings out and back ×2, front light 3 s ×3) | written, schedule and servo-spacing rule covered by unit tests |
@@ -41,6 +41,9 @@ off a schedule that a host test checks — two wing cycles, three three-second f
 servo commands closer together than the Nano can actually carry out. It is off by default; arm it
 once with `demo on` (the setting lives in NVS and survives reflashing), or run it any time with
 `demo run`. Everything about it is tunable from `demo.*` parameters. See `docs/COMMANDS.md`.
+It works with the Nano firmware the kit ships with (full sweeps, no confirmation) and gets gentler
+sweeps and position confirmation once `src/aux/` is flashed. `docs/INSTALL.he.md` walks through
+the whole installation step by step.
 
 ## The deployment sequence
 
@@ -74,5 +77,6 @@ in a browser. The six domain-council reports behind it are in `docs/council/*.md
 | מסמך | מה זה |
 |---|---|
 | `docs/ideas.he.html` | מסמך הרעיונות המלא בעברית: תובנות מהקוד המקורי, כ-65 רעיונות, שש הדגמות דגל, מסלול ושאלות. |
+| `docs/INSTALL.he.md` | מדריך התקנה צעד-צעד: VS Code, PlatformIO, צריבת ה-ESP32-CAM וה-Nano, הפעלת ההדגמה. |
 | `docs/HARDWARE_BRIEF.md` | תקציר החומרה שנגזר מקריאת הקוד המקורי (אנגלית). |
 | `docs/council/*.md` | שישה דוחות מהנדסים לפי תת-מערכת (אנגלית). |

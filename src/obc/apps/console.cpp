@@ -56,8 +56,10 @@ void console_print_telemetry_frame(Print& out) {
   char countdown[24] = "";
   if (mission_countdown_s()) snprintf(countdown, sizeof countdown, "  deploy in %lus", (unsigned long)mission_countdown_s());
   out.printf("  msn   %s%s  attitude=%s\n", mission_phase_str(), countdown, orientation_str(mission_orientation()));
-  out.printf("  aux   %s  servo=%u  panels=%s\n", hk.aux_ok ? "ok" : "no link",
-             hk.aux_ok ? hk.aux.servo_angle : 0, hk.panels_deployed ? "deployed" : "retracted");
+  if (hk.aux_ok) out.printf("  aux   ok (v2)  servo=%u  panels=%s\n", hk.aux.servo_angle, hk.panels_deployed ? "deployed" : "retracted");
+  else out.printf("  aux   %s  panels=%s (commanded)\n",
+                  aux_protocol() == AUX_PROTO_LEGACY ? "stock firmware, no readback" : "no link",
+                  hk.panels_deployed ? "deployed" : "retracted");
   out.printf("  link  wifi=%s%s  ip=%s\n",
              hk.wifi_mode == 0 ? "off" : (hk.wifi_mode == 1 ? "station" : "access-point"),
              hk.wifi_connected ? " connected" : "", hk.ip);

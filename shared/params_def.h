@@ -80,6 +80,9 @@ struct __attribute__((packed)) Params {
   uint16_t demo_panel_move_ms;    // time allowed for one servo sweep
   uint16_t demo_panel_rest_ms;    // servo unpowered between sweeps
   uint16_t demo_settle_ms;        // beat between the panel act and the light act
+  uint8_t  demo_open_deg;         // wing angles the show drives to when the AUX takes an angle
+  uint8_t  demo_closed_deg;       //   (v2 firmware); the stock firmware only knows a full sweep
+  uint16_t demo_fade_ms;          // front light ramp, 0 = hard on/off
 
   uint32_t crc;                   // crc32 over all preceding bytes
 };
@@ -137,6 +140,12 @@ static inline void params_set_defaults(Params& p) {
   p.demo_panel_move_ms = d.panel_move_ms;
   p.demo_panel_rest_ms = d.panel_rest_ms;
   p.demo_settle_ms     = d.settle_ms;
+  // 15 / 165 rather than the mechanism's 10 / 170: the servo then stops a few degrees short of
+  // the end stops instead of stalling against them until the AUX cuts its power, which is the
+  // wear the show would otherwise repeat four times per run. Visually the same sweep.
+  p.demo_open_deg      = 15;
+  p.demo_closed_deg    = 165;
+  p.demo_fade_ms       = 300;
 }
 
 // Copy the demo fields out of / into a DemoShowCfg, so the show schedule and the stored table
@@ -225,6 +234,9 @@ static inline bool params_sanitize(Params& p) {
   // place whether the values arrive from NVS, from `params set` or from a default.
   { DemoShowCfg d; params_get_demo_cfg(p, d);
     if (demo_cfg_sanitize(d)) { params_put_demo_cfg(p, d); changed = true; } }
+  PARAMS_CLAMP_FIELD(p, demo_open_deg, uint8_t, 0, 180);
+  PARAMS_CLAMP_FIELD(p, demo_closed_deg, uint8_t, 0, 180);
+  PARAMS_CLAMP_FIELD(p, demo_fade_ms, uint16_t, 0, 2000);
   for (int i = 0; i < 3; i++) {
     float v = p.att_offset[i];
     if (!(v == v)) { p.att_offset[i] = 0; changed = true; }  // NaN guard
@@ -291,6 +303,9 @@ static const ParamDesc PARAM_TABLE[] = {
   PD("demo.panel_move_ms",  demo_panel_move_ms, PARAM_U16, AUX_SERVO_POWER_MS, 20000),
   PD("demo.panel_rest_ms",  demo_panel_rest_ms, PARAM_U16, 0, 20000),
   PD("demo.settle_ms",      demo_settle_ms, PARAM_U16, 0, 60000),
+  PD("demo.open_deg",       demo_open_deg, PARAM_U8, 0, 180),
+  PD("demo.closed_deg",     demo_closed_deg, PARAM_U8, 0, 180),
+  PD("demo.fade_ms",        demo_fade_ms, PARAM_U16, 0, 2000),
 };
 #define PARAM_TABLE_LEN (sizeof(PARAM_TABLE) / sizeof(PARAM_TABLE[0]))
 

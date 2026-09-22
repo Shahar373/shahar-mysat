@@ -16,6 +16,13 @@ enum AuxLegacyCmd : uint8_t {
   AUX_LEGACY_RF_SET      = 3,   // v2: enters HC-12 AT mode for 60 s (auto exit)
 };
 
+// How a v1.x AUX -- the firmware the kit ships with -- receives an I2C write: it keeps only the
+// LAST byte and runs it through the switch above. A v2 frame's last byte is its CRC, so a frame
+// sent to a v1 AUX is either ignored or, for the two CRC values 0x00 and 0x01, misread as a wing
+// command. Frames must therefore never be sent to a v1 AUX; aux_legacy_equivalent() below gives
+// the single byte to send instead, and the OBC detects which firmware it is talking to from
+// whether a status read answers (nano_link.cpp).
+
 // v2 framed command: [AUX_FRAME_MAGIC][cmd][arg][crc8_smbus over the first 3 bytes]
 #define AUX_FRAME_MAGIC 0xA5
 #define AUX_FRAME_LEN   4
@@ -30,6 +37,25 @@ enum AuxCmd : uint8_t {
   AUX_CMD_HEARTBEAT    = 0x20,  // arg = OBC mode id; AUX tracks the age of the last heartbeat
   AUX_CMD_LED          = 0x30,  // arg 0 = off, 1 = on, 2 = default pattern
   AUX_CMD_RESET_STATS  = 0x7F,  // clear command / crc counters
+};
+
+// The v1.x single byte that carries the same meaning as a v2 command, or -1 when v1 has no
+// equivalent and the command must be dropped rather than sent (a heartbeat, an LED pattern, an
+// arbitrary servo angle: v1 cannot do any of them, and a frame would risk the misread above).
+static inline int aux_legacy_equivalent(uint8_t cmd, uint8_t arg) {
+  switch (cmd) {
+    case AUX_CMD_MOTOR_OPEN:  return AUX_LEGACY_MOTOR_OPEN;
+    case AUX_CMD_MOTOR_CLOSE: return AUX_LEGACY_MOTOR_CLOSE;
+    case AUX_CMD_RF_SET:      return arg ? AUX_LEGACY_RF_SET : -1;   // v1 has no "leave AT mode"
+    default:                  return -1;
+  }
+}
+
+// Which AUX firmware the OBC has found on the bus.
+enum AuxProto : uint8_t {
+  AUX_PROTO_UNKNOWN = 0,   // not probed yet
+  AUX_PROTO_LEGACY  = 1,   // no status readback: the stock kit firmware, single-byte commands only
+  AUX_PROTO_V2      = 2,   // answers status reads: framed commands, readback, heartbeat
 };
 
 // Servo timing, shared so the OBC can pace its commands to what the AUX actually does.

@@ -76,6 +76,8 @@ deliberate, since stopping half way is worse for the mechanism than finishing th
 | `demo.panel_rest_ms` | `400` | servo unpowered between sweeps |
 | `demo.settle_ms` | `1500` | pause between the wing act and the light act |
 | `demo.end_deployed` | `0` | `1` = one extra deploy at the end, so the show finishes wings-out |
+| `demo.open_deg` / `demo.closed_deg` | `15` / `165` | wing angles the show drives to. A few degrees short of the mechanism's 10 / 170 end stops, so the servo reaches its target and is switched off instead of stalling against the stop until the power cut-off. Needs the v2 Nano firmware; the stock one only knows a full sweep |
+| `demo.fade_ms` | `300` | the front light ramps up and down over this long instead of snapping; `0` = hard on/off |
 
 The default show takes 30.5 seconds. `demo plan` prints the resulting timeline and the closest
 spacing between two servo commands, which the firmware will not let you set below
@@ -87,6 +89,14 @@ values are clamped on load rather than obeyed.
 
 The front light is the STAR LED on GPIO14 -- the white PWM LED on the camera face, the same one
 `led toggle` drives.
+
+### With the Nano firmware the kit ships with
+
+The OBC works out which Nano firmware is on the bus (`demo` and `status` both say). With the stock
+one the show still runs, with two limits: every wing movement is a full sweep to the end stops,
+because that firmware knows nothing else, and no movement can be confirmed, because it reports
+nothing back. Flash `src/aux/` (`pio run -e aux -t upload`) to get the gentle angles, the
+confirmation and the heartbeat; nothing else changes.
 
 ## LEDs
 

@@ -361,6 +361,59 @@ void test_demo_zero_cycles_leaves_only_the_light() {
   TEST_ASSERT_EQUAL_INT(3, demo_count_kind(st, n, DEMO_STEP_LIGHT_ON));
 }
 
+// ---------------------------------------------------------------- v1 (stock Nano) compatibility
+// The kit's own Nano firmware keeps only the last byte of an I2C write. A v2 frame's last byte is
+// its CRC, so frames must never reach it; these pin down both the hazard and the rule.
+void test_aux_legacy_equivalent_maps_the_wing_commands() {
+  TEST_ASSERT_EQUAL_INT(AUX_LEGACY_MOTOR_OPEN,  aux_legacy_equivalent(AUX_CMD_MOTOR_OPEN, 0));
+  TEST_ASSERT_EQUAL_INT(AUX_LEGACY_MOTOR_CLOSE, aux_legacy_equivalent(AUX_CMD_MOTOR_CLOSE, 0));
+  TEST_ASSERT_EQUAL_INT(AUX_LEGACY_RF_SET,      aux_legacy_equivalent(AUX_CMD_RF_SET, 1));
+}
+void test_aux_legacy_equivalent_drops_what_v1_cannot_do() {
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_HEARTBEAT, 2));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_LED, 1));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_SERVO_ANGLE, 90));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_RF_SET, 0));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_RF_POWER, 1));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_NOP, 0));
+}
+// Why the rule exists: for some arguments a frame's CRC byte is exactly the v1 code for "open"
+// or "close". Angle 41 is one of them (CRC 0x00). Sent as a frame to the stock firmware it would
+// deploy the wings; the mapping above turns it into "not sent" instead.
+void test_aux_frame_crc_can_collide_with_a_v1_wing_command() {
+  uint8_t f[3] = { AUX_FRAME_MAGIC, AUX_CMD_SERVO_ANGLE, 41 };
+  TEST_ASSERT_EQUAL_HEX8(AUX_LEGACY_MOTOR_OPEN, crc8_smbus(f, 3));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_SERVO_ANGLE, 41));
+}
+// ... and the two wing commands the OBC does send are, by luck, ignored rather than misread if a
+// frame ever did slip through: their CRCs are not 0 or 1. Recorded so a future ICD change that
+// makes them collide is noticed.
+void test_aux_wing_frames_are_at_least_ignored_by_v1() {
+  uint8_t o[3] = { AUX_FRAME_MAGIC, AUX_CMD_MOTOR_OPEN, 0 };
+  uint8_t c[3] = { AUX_FRAME_MAGIC, AUX_CMD_MOTOR_CLOSE, 0 };
+  TEST_ASSERT_TRUE(crc8_smbus(o, 3) > AUX_LEGACY_RF_SET);
+  TEST_ASSERT_TRUE(crc8_smbus(c, 3) > AUX_LEGACY_RF_SET);
+}
+
+void test_params_demo_angle_and_fade_keys() {
+  Params p; params_set_defaults(p);
+  TEST_ASSERT_EQUAL_UINT8(15, p.demo_open_deg);
+  TEST_ASSERT_EQUAL_UINT8(165, p.demo_closed_deg);
+  TEST_ASSERT_EQUAL_UINT16(300, p.demo_fade_ms);
+  const ParamDesc* d = params_find("demo.open_deg");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_TRUE(params_set_from_str(p, *d, "10"));
+  TEST_ASSERT_EQUAL_UINT8(10, p.demo_open_deg);
+  TEST_ASSERT_FALSE(params_set_from_str(p, *d, "200"));
+  d = params_find("demo.fade_ms");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_FALSE(params_set_from_str(p, *d, "5000"));
+  p.demo_fade_ms = 9000; p.demo_closed_deg = 250;
+  TEST_ASSERT_TRUE(params_sanitize(p));
+  TEST_ASSERT_EQUAL_UINT16(2000, p.demo_fade_ms);
+  TEST_ASSERT_EQUAL_UINT8(180, p.demo_closed_deg);
+}
+
 // ---------------------------------------------------------------- params v2 -> v3 migration
 // Adding the demo.* fields changed sizeof(Params), so every table written by the previous firmware
 // fails params_check(). Without a migration path that silently costs the owner their callsign,
@@ -454,6 +507,10 @@ void test_params_sanitize_fixes_unsafe_demo_timing() {
   TEST_ASSERT_TRUE(demo_min_servo_gap_ms(st, n) >= AUX_SERVO_MIN_CMD_GAP_MS);
 }
 
+// Real Unity (pio test -e native) calls these around every test; the offline shim does not.
+void setUp() {}
+void tearDown() {}
+
 int main(int argc, char** argv) {
   (void)argc; (void)argv;
   UNITY_BEGIN();
@@ -475,6 +532,11 @@ int main(int argc, char** argv) {
   RUN_TEST(test_params_migration_rejects_the_wrong_size);
   RUN_TEST(test_params_demo_keys_are_settable);
   RUN_TEST(test_params_sanitize_fixes_unsafe_demo_timing);
+  RUN_TEST(test_aux_legacy_equivalent_maps_the_wing_commands);
+  RUN_TEST(test_aux_legacy_equivalent_drops_what_v1_cannot_do);
+  RUN_TEST(test_aux_frame_crc_can_collide_with_a_v1_wing_command);
+  RUN_TEST(test_aux_wing_frames_are_at_least_ignored_by_v1);
+  RUN_TEST(test_params_demo_angle_and_fade_keys);
   RUN_TEST(test_crc8_known_vector);
   RUN_TEST(test_crc8_changes_on_bit_flip);
   RUN_TEST(test_crc32_known_vector);
