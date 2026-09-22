@@ -7,31 +7,40 @@ web dashboard the satellite serves from its own WiFi access point with zero exte
 
 Baseline is the stock [MySatKit-Firmware v1.4.1](https://github.com/MySatKit/MySatKit-Firmware).
 
-## Status: phase 0 (foundations) complete
+## Status: phase 0 (foundations) complete, and all three targets now build
 
 | Piece | State |
 |---|---|
-| `src/aux/` — Nano auxiliary firmware v2 | written, **compiled and linked** with a real avr-gcc build (`tools/build_aux.sh`), 6.7 KB flash |
-| `shared/` — portable core (CRC, parameter table, command tokenizer, orientation triggers, ICD) | written, **34/34 unit tests pass** (`tools/run_native_tests.sh`) |
-| `src/obc/` — ESP32-CAM main firmware v2 | written, API-checked against every vendored library header by hand; **not yet compiled** — see below |
+| `src/aux/` — Nano auxiliary firmware v2 | **compiled and linked** with a real avr-gcc build (`tools/build_aux.sh`), 6.7 KB flash |
+| `shared/` — portable core (CRC, parameter table, command tokenizer, orientation triggers, show schedule, ICD) | **52/52 unit tests pass** (`tools/run_native_tests.sh`) |
+| `src/obc/` — ESP32-CAM main firmware v2 | **compiled and linked** against Arduino-ESP32 2.0.17 (`tools/build_obc.sh`), 1.06 MB of the 3 MB app slot |
 | Deployment sequencer (pull pin → deploy, flip → stow) | written, trigger maths covered by unit tests |
+| Demonstration show (pull pin → wings out and back ×2, front light 3 s ×3) | written, schedule and servo-spacing rule covered by unit tests |
 | `data/index.html` — web dashboard | written |
 | `docs/` — architecture, command reference, build/flash guide | written |
 
-**Why the ESP32 side isn't compiled yet:** this repo was built in a network-isolated sandbox where
-both the PlatformIO package registry and the Arduino board-manager's tool index were unreachable —
-even `arduino-cli` couldn't install the Espressif core without them, and the toolchain + precompiled
-libraries run several hundred MB, too large to vendor into git. Everything that *could* be verified
-offline was: the Nano firmware built with a real cross-compiler, and 34 unit tests exercise the
-shared CRC / parameter / command-parsing / orientation-trigger logic with plain `g++` (this has
-already caught two real bugs — a reference bound into a `packed` struct, which GCC rightly rejects,
-and an off-by-one tick in the flip debouncer). Full details, including what to expect on your first
-`pio run -e obc`, are in `docs/ARCHITECTURE.md`.
+The ESP32 target was written before it could be compiled — the sandbox this repo was bootstrapped
+in could not reach the PlatformIO registry or the Arduino board-manager index. Its first real build
+found two genuine bugs: a missing `#include "core/log.h"` in `apps/web.cpp`, and a name collision
+between this project's `ParamType` enum values (`PT_U8`, `PT_STR`, ...) and the identically-named
+ones in Arduino-ESP32's `Preferences.h`, which `core/params_store.cpp` includes alongside the
+parameter table. Both are fixed. `tools/build_obc.sh` reproduces that build from GitHub release
+assets alone, for environments where the package registries are blocked; with ordinary internet
+access `pio run -e obc` is still the supported path.
 
 **Read `docs/FLASHING.md` first** to build and flash. **Read `docs/COMMANDS.md`** for the console/API
 command reference — old stock-firmware commands still work, rewritten to the new grammar
 automatically. **Read `docs/ARCHITECTURE.md`** for the task diagram, what changed from the stock
 firmware and why, and the decisions made from your answers to the phase-0 questions.
+
+## The demonstration show
+
+For showing the cube to people: pull the "remove before flight" pin and the satellite deploys and
+folds its solar wings twice, then turns the front light on for three seconds, three times. It runs
+off a schedule that a host test checks — two wing cycles, three three-second flashes, and no two
+servo commands closer together than the Nano can actually carry out. It is off by default; arm it
+once with `demo on` (the setting lives in NVS and survives reflashing), or run it any time with
+`demo run`. Everything about it is tunable from `demo.*` parameters. See `docs/COMMANDS.md`.
 
 ## The deployment sequence
 

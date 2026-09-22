@@ -6,10 +6,15 @@
 #include "core/mission_clock.h"
 #include "core/params_store.h"
 #include "hal/nano_link.h"
+#include "apps/demo.h"
 #include "attitude_trigger.h"
 #include <esp_system.h>
 
 static const uint32_t TICK_MS = 250;
+// The demonstration show is timed in whole seconds of light and servo travel, so while it runs the
+// sequencer ticks faster: at 250 ms a "three second" flash could be off by a quarter of a second,
+// which is visible when three of them happen in a row.
+static const uint32_t DEMO_TICK_MS = 50;
 static const uint32_t SETTLE_BEFORE_LEARN_MS = 3000;   // how long it must sit still to learn "up"
 static const uint32_t DEPLOY_TRAVEL_MS = 4000;         // servo sweep (~1.6 s) plus margin
 static const float    PANEL_CURRENT_EVIDENCE_MA = 3.0f;// panel current rise that corroborates a deploy
@@ -25,6 +30,7 @@ static OrientationDebouncer s_debounce;
 static float    s_panel_ma_before = 0.0f;
 static float    s_panel_ma_after = 0.0f;
 static bool     s_last_deploy_confirmed = false;
+static uint32_t s_tick_ms = TICK_MS;       // the delay actually used last pass, fed to the debouncer
 
 static void set_phase(uint8_t phase) {
   if (s_phase == phase) return;
@@ -47,6 +53,7 @@ const char* mission_phase_str() {
     case MPHASE_NOMINAL: return "NOMINAL";
     case MPHASE_STOWED: return "STOWED";
     case MPHASE_MANUAL: return "MANUAL";
+    case MPHASE_DEMO: return "DEMO";
     default: return "?";
   }
 }
@@ -128,12 +135,22 @@ static void do_stow(const char* reason) {
 
 // ---------------------------------------------------------------- separation
 void mission_trigger_separation() {
+  if (demo_running()) demo_stop("superseded by a separation command");
   s_separation_ms = millis();
   uint32_t epoch = clock_epoch_or_zero();
   if (epoch) { params_lock(); g_params.launch_epoch = epoch; params_unlock(); params_save(); }
   events_post(EV_SEPARATION, g_params.deploy_inhibit_s, "separation, deploying in %us", g_params.deploy_inhibit_s);
   LOGI("MISSION", "SEPARATION -- deployment in %u s", g_params.deploy_inhibit_s);
   set_phase(MPHASE_LEOP);
+}
+
+// The show owns the servo for its whole duration; holding MPHASE_DEMO is what keeps the
+// orientation triggers off the mechanism while it runs.
+bool mission_begin_demo(const char* reason) {
+  if (s_phase == MPHASE_DEMO) return false;
+  if (!demo_start(reason)) return false;
+  set_phase(MPHASE_DEMO);
+  return true;
 }
 
 void mission_abort() {
@@ -149,6 +166,11 @@ void mission_set_auto(bool on) {
   if (on && s_phase == MPHASE_MANUAL) set_phase(g_params.panels_deployed ? MPHASE_NOMINAL : MPHASE_STOWED);
   LOGI("MISSION", "automatic orientation triggers %s", on ? "armed" : "disabled");
 }
+
+// Any servo movement, whoever ordered it, resets the anti-chatter timer that protects the
+// mechanism. The demonstration show uses this so its sweeps are not immediately followed by an
+// orientation trigger once the show hands the phase back.
+void mission_note_actuation() { s_last_actuation_ms = millis(); }
 
 void mission_note_manual_actuation() {
   s_last_actuation_ms = millis();
@@ -183,6 +205,8 @@ void mission_status(Print& out) {
              s_auto ? "armed" : "disabled",
              g_params.stow_on_flip ? "on" : "off", g_params.deploy_on_upright ? "on" : "off");
   out.printf("deploy inhibit  : %us after separation\n", g_params.deploy_inhibit_s);
+  out.printf("demo show       : %s%s\n", g_params.demo_enabled ? "armed on the launch pin" : "not armed",
+             demo_running() ? " (RUNNING)" : "");
   if (g_params.launch_epoch) {
     char met[24]; clock_format_duration(clock_met_s(g_params.launch_epoch), met, sizeof met);
     out.printf("mission elapsed : %s\n", met);
@@ -202,7 +226,12 @@ static void mission_task(void*) {
   // launch -- the satellite is already in orbit, so it must not re-run the deployment sequence.
   esp_reset_reason_t reason = esp_reset_reason();
   bool poweron = (reason == ESP_RST_POWERON || reason == ESP_RST_BROWNOUT);
-  if (poweron && g_params.auto_deploy) {
+  if (poweron && g_params.demo_enabled) {
+    // Bench demonstration: the pin is a show cue rather than a separation signal, so the launch
+    // sequence is deliberately not run -- the satellite performs the routine and stops.
+    LOGI("MISSION", "launch pin pulled with the demonstration show armed");
+    if (!mission_begin_demo("launch pin pulled")) set_phase(g_params.panels_deployed ? MPHASE_NOMINAL : MPHASE_PRELAUNCH);
+  } else if (poweron && g_params.auto_deploy) {
     mission_trigger_separation();
   } else {
     set_phase(g_params.panels_deployed ? MPHASE_NOMINAL : MPHASE_PRELAUNCH);
@@ -210,6 +239,13 @@ static void mission_task(void*) {
   }
 
   for (;;) {
+    // While the demonstration show holds the phase it is the only thing allowed to move the
+    // servo; everything below still observes and logs, it just does not actuate.
+    if (s_phase == MPHASE_DEMO) {
+      demo_tick();
+      if (!demo_running()) set_phase(g_params.panels_deployed ? MPHASE_NOMINAL : MPHASE_STOWED);
+    }
+
     s_debounce.required_s = (float)g_params.flip_hold_s;   // picked up live from `params set`
     Telemetry tm; telemetry_get(tm);
     Vec3 accel = { tm.att.accel_g[0], tm.att.accel_g[1], tm.att.accel_g[2] };
@@ -227,11 +263,11 @@ static void mission_task(void*) {
     if (settled) {
       Vec3 ref = { g_params.up_ref[0], g_params.up_ref[1], g_params.up_ref[2] };
       uint8_t observed = at_classify(accel, ref, g_params.up_ref_valid != 0);
-      if (s_debounce.update(observed, TICK_MS / 1000.0f)) {
+      if (s_debounce.update(observed, s_tick_ms / 1000.0f)) {
         s_orientation = s_debounce.stable;
         events_post(EV_ORIENTATION, s_orientation, "orientation: %s", orientation_str(s_orientation));
 
-        if (s_auto && actuation_allowed()) {
+        if (s_auto && actuation_allowed() && s_phase != MPHASE_DEMO) {
           if (s_orientation == ORIENT_INVERTED && g_params.stow_on_flip &&
               (s_phase == MPHASE_NOMINAL || s_phase == MPHASE_LEOP)) {
             if (s_phase == MPHASE_LEOP) LOGI("MISSION", "turned over during the countdown, deployment cancelled");
@@ -254,7 +290,8 @@ static void mission_task(void*) {
     }
 
     fdir_wdt_feed();
-    vTaskDelay(pdMS_TO_TICKS(TICK_MS));
+    s_tick_ms = (s_phase == MPHASE_DEMO) ? DEMO_TICK_MS : TICK_MS;
+    vTaskDelay(pdMS_TO_TICKS(s_tick_ms));
   }
 }
 

@@ -39,6 +39,7 @@ void leds_tick() {
     case LED_LEOP: { float ph = (now % 1200) / 1200.0f; uint8_t v = (uint8_t)(30 + 220 * fabsf(sinf(ph * 3.14159f))); c = rgb(v, (uint8_t)(v * 0.55f), 0); break; }
     case LED_DEPLOY: c = ((now % 250) < 125) ? rgb(255, 150, 0) : 0; break;
     case LED_STOWED: { uint32_t t = now % 2000; c = (t < 150) ? rgb(200, 0, 200) : rgb(20, 0, 20); break; }
+    case LED_DEMO: { float ph = (now % 1000) / 1000.0f; uint8_t v = (uint8_t)(25 + 200 * fabsf(sinf(ph * 3.14159f))); c = rgb(0, (uint8_t)(v * 0.8f), v); break; }
     default: break;
   }
   s_px.setPixelColor(0, c); s_px.show();
@@ -47,6 +48,9 @@ void leds_tick() {
 void star_led_set(bool on) { s_star = on; if (!s_blinking) ledcWrite(STAR_PWM_CH, on ? STAR_BRIGHTNESS : 0); }
 bool star_led_get() { return s_star; }
 void star_led_blink_test() { s_blinking = true; s_blink_step = 0; s_blink_t = millis(); }
+// Without this, a blink test still in progress would swallow the demo show's first light step:
+// star_led_set() only records the wanted state while s_blinking is true.
+void star_led_cancel_blink() { s_blinking = false; ledcWrite(STAR_PWM_CH, s_star ? STAR_BRIGHTNESS : 0); }
 void star_led_tick() {
   if (!s_blinking) return;
   if (millis() - s_blink_t < 250) return;

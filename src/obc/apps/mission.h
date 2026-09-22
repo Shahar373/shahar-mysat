@@ -20,8 +20,10 @@ uint8_t     mission_orientation();        // last debounced Orientation value
 bool        mission_auto_enabled();
 
 void mission_trigger_separation();        // manual "pull the pin" for demos, no power cycle needed
+bool mission_begin_demo(const char* reason);   // hand the servo to the demonstration show
 void mission_abort();                     // cancel a pending deployment, hold position
 void mission_learn_upright();             // record the current attitude as "this way up"
 void mission_set_auto(bool on);
 void mission_note_manual_actuation();     // called by the console when a human drives the panels
+void mission_note_actuation();            // record a servo movement without changing the phase
 void mission_status(Print& out);

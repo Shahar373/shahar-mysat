@@ -38,6 +38,51 @@ rather than being silently ignored.
 Driving the panels by hand (`solar deploy`, `solar retract`, `solar angle`) automatically suspends
 the orientation triggers so the servo never fights you; `mission auto on` re-arms them.
 
+## Demonstration show
+
+The bench routine for showing the cube to people: pull the "remove before flight" pin and the
+satellite deploys and folds its wings twice, then turns the front light on for three seconds, three
+times. Off by default -- arm it once with `demo on` and the setting survives reflashing.
+
+| Command | Effect |
+|---|---|
+| `demo` / `demo status` | is it running, what step, and the full schedule the current parameters produce |
+| `demo plan` | just the schedule |
+| `demo run` | run the show now, no power cycle needed |
+| `demo stop` | cancel it (a servo sweep already under way still finishes -- see below) |
+| `demo on` / `demo off` | run the show when the launch pin is pulled, or go back to the normal single deployment |
+
+While the show runs the mission phase is `DEMO` and the SIGNAL LED breathes cyan, turning amber
+whenever the servo is moving. Any `solar ...` command stops the show and hands you the servo.
+
+`demo stop` stops the *schedule*. It cannot abort a sweep already in progress: once commanded, the
+AUX controller drives the servo from its own timer and the protocol has no halt -- which is
+deliberate, since stopping half way is worse for the mechanism than finishing the sweep.
+
+### Tuning it
+
+| Key | Default | What it does |
+|---|---|---|
+| `demo.enabled` | `0` | `1` = pulling the launch pin runs the show instead of the deployment sequence |
+| `demo.panel_cycles` | `2` | how many times the wings go out and back |
+| `demo.light_flashes` | `3` | how many times the front light comes on |
+| `demo.light_on_ms` | `3000` | how long it stays on |
+| `demo.light_off_ms` | `1000` | the gap between flashes |
+| `demo.arm_delay_ms` | `5000` | from the pin coming out to the first movement, so you can put the cube down |
+| `demo.panel_move_ms` | `2600` | time allowed for one servo sweep |
+| `demo.panel_rest_ms` | `400` | servo unpowered between sweeps |
+| `demo.settle_ms` | `1500` | pause between the wing act and the light act |
+| `demo.end_deployed` | `0` | `1` = one extra deploy at the end, so the show finishes wings-out |
+
+The default show takes about 29 seconds. `demo plan` prints the resulting timeline and the closest
+spacing between two servo commands, which the firmware will not let you set below
+`AUX_SERVO_MIN_CMD_GAP_MS` (2400 ms): the AUX controller powers the servo for 2.2 s per movement
+and ignores a new one while a sweep is running, so a faster schedule would give you one
+half-finished sweep instead of two. Out-of-range values are clamped on load rather than obeyed.
+
+The front light is the STAR LED on GPIO14 -- the white PWM LED on the camera face, the same one
+`led toggle` drives.
+
 ## LEDs
 
 | Command | Effect |
@@ -57,6 +102,7 @@ The SIGNAL LED (NeoPixel) is not manually commandable — it always shows system
 | blue slow blink | WiFi station configured but not connected |
 | amber solid | serving its own access point |
 | red double blink | a sensor has been isolated by FDIR |
+| cyan breathing | the demonstration show is running |
 
 ## Attitude
 
@@ -164,6 +210,7 @@ Two stock commands don't have a direct equivalent because the interaction model 
 | `mission.flip_hold_s` | `2` | how long an orientation must hold before it counts (stops a wave of the hand from folding the panels) |
 | `mission.actuation_gap_s` | `5` | minimum seconds between two servo movements, to protect the mechanism |
 | `imu.up_ref_valid` | `0` | becomes `1` once the satellite has learned which way is up |
+| `demo.enabled` | `0` | pulling the launch pin runs the demonstration show instead of deploying (see above) |
 
 Example: make the sequence behave like a real CubeSat launch, with a 30-minute inhibit and no
 orientation triggers at all:

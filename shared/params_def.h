@@ -7,9 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "crc.h"
+#include "demo_show.h"
 
 #define PARAMS_MAGIC   0x4D595341u   // 'MYSA'
-#define PARAMS_VERSION 2
+#define PARAMS_VERSION 3
 
 struct __attribute__((packed)) Params {
   uint32_t magic;
@@ -66,8 +67,26 @@ struct __attribute__((packed)) Params {
   float    gs_lon;
   uint32_t launch_epoch;          // unix seconds of "separation", 0 = not launched
 
+  // ---- appended in version 3: the bench demonstration show (shared/demo_show.h, apps/demo.cpp).
+  // Everything from here to `crc` is new, which is what makes the v2 -> v3 upgrade a straight
+  // prefix copy (params_try_migrate below) instead of a settings wipe.
+  uint8_t  demo_enabled;          // 1 = pulling the launch pin runs the show, not the deployment
+  uint8_t  demo_panel_cycles;     // wings out-and-back this many times
+  uint8_t  demo_light_flashes;    // then the front light on/off this many times
+  uint8_t  demo_end_deployed;     // 1 = finish the show with the wings out
+  uint16_t demo_light_on_ms;
+  uint16_t demo_light_off_ms;
+  uint16_t demo_arm_delay_ms;     // pin out -> first movement
+  uint16_t demo_panel_move_ms;    // time allowed for one servo sweep
+  uint16_t demo_panel_rest_ms;    // servo unpowered between sweeps
+  uint16_t demo_settle_ms;        // beat between the panel act and the light act
+
   uint32_t crc;                   // crc32 over all preceding bytes
 };
+
+// Layout of the version-2 table: identical up to the first demo field, then its own crc.
+#define PARAMS_V2_PAYLOAD_BYTES ((uint16_t)offsetof(Params, demo_enabled))
+#define PARAMS_V2_SIZE_BYTES    ((uint16_t)(PARAMS_V2_PAYLOAD_BYTES + sizeof(uint32_t)))
 
 static inline void params_set_str(char* dst, size_t cap, const char* src) {
   if (cap == 0) return;
@@ -105,6 +124,44 @@ static inline void params_set_defaults(Params& p) {
   p.up_ref_valid = 0;
   p.gs_lat = 32.08f; p.gs_lon = 34.78f;  // Israel center default, until the user sets it
   p.launch_epoch = 0;
+  // The demo show is off by default: pulling the pin keeps doing what docs/ARCHITECTURE.md
+  // describes (one deployment) until someone deliberately turns the show on.
+  DemoShowCfg d; demo_cfg_defaults(d);
+  p.demo_enabled       = 0;
+  p.demo_panel_cycles  = d.panel_cycles;
+  p.demo_light_flashes = d.light_flashes;
+  p.demo_end_deployed  = d.end_deployed;
+  p.demo_light_on_ms   = d.light_on_ms;
+  p.demo_light_off_ms  = d.light_off_ms;
+  p.demo_arm_delay_ms  = d.arm_delay_ms;
+  p.demo_panel_move_ms = d.panel_move_ms;
+  p.demo_panel_rest_ms = d.panel_rest_ms;
+  p.demo_settle_ms     = d.settle_ms;
+}
+
+// Copy the demo fields out of / into a DemoShowCfg, so the show schedule and the stored table
+// never drift apart.
+static inline void params_get_demo_cfg(const Params& p, DemoShowCfg& c) {
+  c.arm_delay_ms  = p.demo_arm_delay_ms;
+  c.panel_cycles  = p.demo_panel_cycles;
+  c.panel_move_ms = p.demo_panel_move_ms;
+  c.panel_rest_ms = p.demo_panel_rest_ms;
+  c.settle_ms     = p.demo_settle_ms;
+  c.light_flashes = p.demo_light_flashes;
+  c.light_on_ms   = p.demo_light_on_ms;
+  c.light_off_ms  = p.demo_light_off_ms;
+  c.end_deployed  = p.demo_end_deployed;
+}
+static inline void params_put_demo_cfg(Params& p, const DemoShowCfg& c) {
+  p.demo_arm_delay_ms  = c.arm_delay_ms;
+  p.demo_panel_cycles  = c.panel_cycles;
+  p.demo_panel_move_ms = c.panel_move_ms;
+  p.demo_panel_rest_ms = c.panel_rest_ms;
+  p.demo_settle_ms     = c.settle_ms;
+  p.demo_light_flashes = c.light_flashes;
+  p.demo_light_on_ms   = c.light_on_ms;
+  p.demo_light_off_ms  = c.light_off_ms;
+  p.demo_end_deployed  = c.end_deployed;
 }
 
 static inline uint32_t params_crc(const Params& p) {
@@ -163,6 +220,11 @@ static inline bool params_sanitize(Params& p) {
   PARAMS_CLAMP_FIELD(p, up_ref_valid, uint8_t, 0, 1);
   PARAMS_CLAMP_FIELD(p, gs_lat, float, -90.f, 90.f);
   PARAMS_CLAMP_FIELD(p, gs_lon, float, -180.f, 180.f);
+  PARAMS_CLAMP_FIELD(p, demo_enabled, uint8_t, 0, 1);
+  // The show's own limits live with the schedule, so the servo-spacing rule is enforced in one
+  // place whether the values arrive from NVS, from `params set` or from a default.
+  { DemoShowCfg d; params_get_demo_cfg(p, d);
+    if (demo_cfg_sanitize(d)) { params_put_demo_cfg(p, d); changed = true; } }
   for (int i = 0; i < 3; i++) {
     float v = p.att_offset[i];
     if (!(v == v)) { p.att_offset[i] = 0; changed = true; }  // NaN guard
@@ -173,50 +235,62 @@ static inline bool params_sanitize(Params& p) {
 }
 
 // ---------------------------------------------------------------- name <-> field access
-enum ParamType : uint8_t { PT_U8, PT_U16, PT_U32, PT_I16, PT_F32, PT_STR };
+// Deliberately not named PT_U8/PT_STR/...: Arduino-ESP32's Preferences.h declares a
+// PreferenceType enum with exactly those names, and params_store.cpp includes both headers.
+enum ParamType : uint8_t { PARAM_U8, PARAM_U16, PARAM_U32, PARAM_I16, PARAM_F32, PARAM_STR };
 
 struct ParamDesc {
   const char* name;
   ParamType   type;
   uint16_t    offset;
-  uint16_t    len;      // string capacity for PT_STR, else element count (1)
+  uint16_t    len;      // string capacity for PARAM_STR, else element count (1)
   float       minv, maxv;
   bool        secret;   // never printed in clear (passwords)
 };
 
 #define PD(name, field, type, minv, maxv) { name, type, (uint16_t)offsetof(Params, field), 1, minv, maxv, false }
-#define PS(name, field, secret) { name, PT_STR, (uint16_t)offsetof(Params, field), (uint16_t)sizeof(((Params*)0)->field), 0, 0, secret }
+#define PS(name, field, secret) { name, PARAM_STR, (uint16_t)offsetof(Params, field), (uint16_t)sizeof(((Params*)0)->field), 0, 0, secret }
 
 static const ParamDesc PARAM_TABLE[] = {
   PS("callsign",            callsign, false),
-  PD("wifi.mode",           wifi_mode, PT_U8, 0, 2),
+  PD("wifi.mode",           wifi_mode, PARAM_U8, 0, 2),
   PS("wifi.ssid",           wifi_ssid, false),
   PS("wifi.pass",           wifi_pass, true),
   PS("ap.pass",             ap_pass, true),
-  PD("wifi.sta_timeout_s",  sta_timeout_s, PT_U8, 5, 120),
-  PD("tm.period_ms",        telemetry_period_ms, PT_U16, 200, 60000),
-  PD("console.mode",        console_mode, PT_U8, 0, 2),
-  PD("console.plotter",     plotter_group, PT_U8, 0, 3),
-  PD("log.level",           log_level, PT_U8, 0, 3),
-  PD("hk.period_s",         hk_period_s, PT_U16, 1, 3600),
-  PD("logger.enabled",      logging_enabled, PT_U8, 0, 1),
-  PD("logger.period_s",     log_period_s, PT_U16, 1, 3600),
-  PD("panels.deployed",     panels_deployed, PT_U8, 0, 1),
-  PD("servo.open_deg",      servo_open_angle, PT_U8, 0, 180),
-  PD("servo.closed_deg",    servo_closed_angle, PT_U8, 0, 180),
-  PD("imu.calibrated",      imu_calibrated, PT_U8, 0, 1),
-  PD("batt.capacity_mah",   battery_capacity_mah, PT_U16, 500, 10000),
-  PD("ina.vbus_corr",       ina_vbus_correction, PT_U8, 0, 1),
-  PD("mission.deploy_inhibit_s", deploy_inhibit_s, PT_U16, 0, 7200),
-  PD("mission.auto_deploy",      auto_deploy, PT_U8, 0, 1),
-  PD("mission.stow_on_flip",     stow_on_flip, PT_U8, 0, 1),
-  PD("mission.deploy_on_upright", deploy_on_upright, PT_U8, 0, 1),
-  PD("mission.flip_hold_s",      flip_hold_s, PT_U8, 1, 60),
-  PD("mission.actuation_gap_s",  actuation_gap_s, PT_U8, 1, 120),
-  PD("imu.up_ref_valid",         up_ref_valid, PT_U8, 0, 1),
-  PD("gs.lat",              gs_lat, PT_F32, -90, 90),
-  PD("gs.lon",              gs_lon, PT_F32, -180, 180),
-  PD("mission.launch_epoch", launch_epoch, PT_U32, 0, 4294967295.f),
+  PD("wifi.sta_timeout_s",  sta_timeout_s, PARAM_U8, 5, 120),
+  PD("tm.period_ms",        telemetry_period_ms, PARAM_U16, 200, 60000),
+  PD("console.mode",        console_mode, PARAM_U8, 0, 2),
+  PD("console.plotter",     plotter_group, PARAM_U8, 0, 3),
+  PD("log.level",           log_level, PARAM_U8, 0, 3),
+  PD("hk.period_s",         hk_period_s, PARAM_U16, 1, 3600),
+  PD("logger.enabled",      logging_enabled, PARAM_U8, 0, 1),
+  PD("logger.period_s",     log_period_s, PARAM_U16, 1, 3600),
+  PD("panels.deployed",     panels_deployed, PARAM_U8, 0, 1),
+  PD("servo.open_deg",      servo_open_angle, PARAM_U8, 0, 180),
+  PD("servo.closed_deg",    servo_closed_angle, PARAM_U8, 0, 180),
+  PD("imu.calibrated",      imu_calibrated, PARAM_U8, 0, 1),
+  PD("batt.capacity_mah",   battery_capacity_mah, PARAM_U16, 500, 10000),
+  PD("ina.vbus_corr",       ina_vbus_correction, PARAM_U8, 0, 1),
+  PD("mission.deploy_inhibit_s", deploy_inhibit_s, PARAM_U16, 0, 7200),
+  PD("mission.auto_deploy",      auto_deploy, PARAM_U8, 0, 1),
+  PD("mission.stow_on_flip",     stow_on_flip, PARAM_U8, 0, 1),
+  PD("mission.deploy_on_upright", deploy_on_upright, PARAM_U8, 0, 1),
+  PD("mission.flip_hold_s",      flip_hold_s, PARAM_U8, 1, 60),
+  PD("mission.actuation_gap_s",  actuation_gap_s, PARAM_U8, 1, 120),
+  PD("imu.up_ref_valid",         up_ref_valid, PARAM_U8, 0, 1),
+  PD("gs.lat",              gs_lat, PARAM_F32, -90, 90),
+  PD("gs.lon",              gs_lon, PARAM_F32, -180, 180),
+  PD("mission.launch_epoch", launch_epoch, PARAM_U32, 0, 4294967295.f),
+  PD("demo.enabled",        demo_enabled, PARAM_U8, 0, 1),
+  PD("demo.panel_cycles",   demo_panel_cycles, PARAM_U8, 0, DEMO_MAX_CYCLES),
+  PD("demo.light_flashes",  demo_light_flashes, PARAM_U8, 0, DEMO_MAX_FLASHES),
+  PD("demo.end_deployed",   demo_end_deployed, PARAM_U8, 0, 1),
+  PD("demo.light_on_ms",    demo_light_on_ms, PARAM_U16, 50, 60000),
+  PD("demo.light_off_ms",   demo_light_off_ms, PARAM_U16, 50, 60000),
+  PD("demo.arm_delay_ms",   demo_arm_delay_ms, PARAM_U16, 0, 60000),
+  PD("demo.panel_move_ms",  demo_panel_move_ms, PARAM_U16, AUX_SERVO_POWER_MS, 20000),
+  PD("demo.panel_rest_ms",  demo_panel_rest_ms, PARAM_U16, 0, 20000),
+  PD("demo.settle_ms",      demo_settle_ms, PARAM_U16, 0, 60000),
 };
 #define PARAM_TABLE_LEN (sizeof(PARAM_TABLE) / sizeof(PARAM_TABLE[0]))
 
@@ -241,12 +315,12 @@ static inline const ParamDesc* params_find(const char* name) {
 static inline void params_get_str(const Params& p, const ParamDesc& d, char* out, size_t cap, bool reveal = false) {
   const uint8_t* base = (const uint8_t*)&p + d.offset;
   switch (d.type) {
-    case PT_U8:  snprintf(out, cap, "%u", (unsigned)*base); break;
-    case PT_U16: { uint16_t v; memcpy(&v, base, 2); snprintf(out, cap, "%u", (unsigned)v); break; }
-    case PT_U32: { uint32_t v; memcpy(&v, base, 4); snprintf(out, cap, "%lu", (unsigned long)v); break; }
-    case PT_I16: { int16_t v; memcpy(&v, base, 2); snprintf(out, cap, "%d", (int)v); break; }
-    case PT_F32: { float v; memcpy(&v, base, 4); snprintf(out, cap, "%.4f", (double)v); break; }
-    case PT_STR:
+    case PARAM_U8:  snprintf(out, cap, "%u", (unsigned)*base); break;
+    case PARAM_U16: { uint16_t v; memcpy(&v, base, 2); snprintf(out, cap, "%u", (unsigned)v); break; }
+    case PARAM_U32: { uint32_t v; memcpy(&v, base, 4); snprintf(out, cap, "%lu", (unsigned long)v); break; }
+    case PARAM_I16: { int16_t v; memcpy(&v, base, 2); snprintf(out, cap, "%d", (int)v); break; }
+    case PARAM_F32: { float v; memcpy(&v, base, 4); snprintf(out, cap, "%.4f", (double)v); break; }
+    case PARAM_STR:
       if (d.secret && !reveal) snprintf(out, cap, "%s", ((const char*)base)[0] ? "***" : "");
       else snprintf(out, cap, "%s", (const char*)base);
       break;
@@ -256,10 +330,10 @@ static inline void params_get_str(const Params& p, const ParamDesc& d, char* out
 // Parse text into a field with range checking. Returns false on a bad value.
 static inline bool params_set_from_str(Params& p, const ParamDesc& d, const char* text) {
   uint8_t* base = (uint8_t*)&p + d.offset;
-  if (d.type == PT_STR) { params_set_str((char*)base, d.len, text ? text : ""); return true; }
+  if (d.type == PARAM_STR) { params_set_str((char*)base, d.len, text ? text : ""); return true; }
   if (!text || !*text) return false;
   char* end = nullptr;
-  if (d.type == PT_F32) {
+  if (d.type == PARAM_F32) {
     float v = strtof(text, &end);
     if (end == text || *end) return false;
     if (v < d.minv || v > d.maxv) return false;
@@ -269,11 +343,36 @@ static inline bool params_set_from_str(Params& p, const ParamDesc& d, const char
   if (end == text || *end) return false;
   if ((float)v < d.minv || (float)v > d.maxv) return false;
   switch (d.type) {
-    case PT_U8:  { uint8_t x = (uint8_t)v; memcpy(base, &x, 1); break; }
-    case PT_U16: { uint16_t x = (uint16_t)v; memcpy(base, &x, 2); break; }
-    case PT_U32: { uint32_t x = (uint32_t)v; memcpy(base, &x, 4); break; }
-    case PT_I16: { int16_t x = (int16_t)v; memcpy(base, &x, 2); break; }
+    case PARAM_U8:  { uint8_t x = (uint8_t)v; memcpy(base, &x, 1); break; }
+    case PARAM_U16: { uint16_t x = (uint16_t)v; memcpy(base, &x, 2); break; }
+    case PARAM_U32: { uint32_t x = (uint32_t)v; memcpy(base, &x, 4); break; }
+    case PARAM_I16: { int16_t x = (int16_t)v; memcpy(base, &x, 2); break; }
     default: return false;
   }
+  return true;
+}
+
+// Upgrade a stored version-2 table in place of a wipe. Adding fields changes sizeof(Params), so
+// params_check() rejects every table written by the previous firmware -- which would silently
+// throw away the owner's callsign, WiFi credentials, gyro calibration and learned upright vector
+// on the first boot after a flash. Version 3 only appends, so the version-2 bytes are a valid
+// prefix of the version-3 struct and can simply be copied over the defaults.
+// Returns false (leaving `p` untouched) if `raw` is not a sound version-2 table.
+static inline bool params_try_migrate(Params& p, const void* raw, size_t len) {
+  if (!raw || len != PARAMS_V2_SIZE_BYTES) return false;
+  const uint8_t* b = (const uint8_t*)raw;
+  uint32_t magic; uint16_t ver, size, stored_off = PARAMS_V2_PAYLOAD_BYTES;
+  memcpy(&magic, b + offsetof(Params, magic), sizeof magic);
+  memcpy(&ver,   b + offsetof(Params, version), sizeof ver);
+  memcpy(&size,  b + offsetof(Params, size), sizeof size);
+  if (magic != PARAMS_MAGIC || ver != 2 || size != PARAMS_V2_SIZE_BYTES) return false;
+  uint32_t stored_crc; memcpy(&stored_crc, b + stored_off, sizeof stored_crc);
+  if (crc32_ieee(b, PARAMS_V2_PAYLOAD_BYTES) != stored_crc) return false;
+  Params up; params_set_defaults(up);                    // new fields keep their defaults
+  memcpy(&up, b, PARAMS_V2_PAYLOAD_BYTES);               // everything version 2 knew about
+  up.magic = PARAMS_MAGIC; up.version = PARAMS_VERSION; up.size = sizeof(Params);
+  params_sanitize(up);
+  params_seal(up);
+  p = up;
   return true;
 }

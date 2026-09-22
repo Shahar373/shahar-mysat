@@ -29,6 +29,7 @@
 #include "apps/wifi.h"
 #include "apps/web.h"
 #include "apps/mission.h"
+#include "apps/demo.h"
 #include "mysat_icd.h"
 
 static uint32_t s_boot_ms;
@@ -43,6 +44,10 @@ static uint8_t current_led_state() {
     case MPHASE_LEOP: return LED_LEOP;
     case MPHASE_DEPLOYING: return LED_DEPLOY;
     case MPHASE_STOWED: return LED_STOWED;
+    // During the demonstration show the light says which act is running: amber while the wings
+    // move, cyan otherwise, so a visitor can read the routine without watching the console.
+    case MPHASE_DEMO:
+      return demo_step_moves_servo(demo_step_kind()) ? LED_DEPLOY : LED_DEMO;
     default: break;
   }
   uint8_t mode; bool connected; int8_t rssi; char ip[16];
@@ -130,6 +135,7 @@ void setup() {
   logger_init();
   if (!camera_init()) LOGW("MAIN", "camera not present or failed to init (non-fatal, secondary payload)");
 
+  demo_init();
   sensors_task_start();
   mission_task_start();
   console_task_start();

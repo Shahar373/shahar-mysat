@@ -32,6 +32,14 @@ enum AuxCmd : uint8_t {
   AUX_CMD_RESET_STATS  = 0x7F,  // clear command / crc counters
 };
 
+// Servo timing, shared so the OBC can pace its commands to what the AUX actually does.
+// The AUX powers the servo for AUX_SERVO_POWER_MS per movement and refuses to start a new
+// movement while one is running, so a command sent sooner than AUX_SERVO_MIN_CMD_GAP_MS after the
+// previous one only retargets the sweep in progress -- it does not produce a second sweep.
+#define AUX_SERVO_STEP_MS         10    // ms per degree while sweeping
+#define AUX_SERVO_POWER_MS        2200  // servo power window per movement (stall protection)
+#define AUX_SERVO_MIN_CMD_GAP_MS  2400  // power window plus one AUX loop pass to detach
+
 // Servo state as reported by AUX
 enum AuxServoState : uint8_t {
   AUX_SERVO_OFF = 0,      // detached, idle
@@ -101,6 +109,8 @@ enum EventCode : uint16_t {
   EV_ORIENTATION = 135,
   EV_UPREF_LEARNED = 136,       // "this way up" reference vector captured
   EV_PHASE = 137,
+  // bench demonstration show (apps/demo.cpp)
+  EV_DEMO = 140,
 };
 
 // Mission sequencer phases (apps/mission.cpp)
@@ -112,4 +122,5 @@ enum MissionPhase : uint8_t {
   MPHASE_NOMINAL = 4,    // panels deployed
   MPHASE_STOWED = 5,     // panels retracted after being turned upside down
   MPHASE_MANUAL = 6,     // operator drove the panels by hand; automatic triggers suspended
+  MPHASE_DEMO = 7,       // running the bench demonstration show (shared/demo_show.h)
 };

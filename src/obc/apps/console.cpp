@@ -14,6 +14,7 @@
 #include "mysat_icd.h"
 #include "apps/wifi.h"
 #include "apps/mission.h"
+#include "apps/demo.h"
 #include "attitude_trigger.h"
 #include <LittleFS.h>
 #include <strings.h>
@@ -84,6 +85,9 @@ void console_print_help(Print& out) {
     "  mission abort                 cancel a pending deployment\n"
     "  mission learn-upright         record the current attitude as 'this way up'\n"
     "  mission auto on|off           arm/disable the flip-to-stow triggers\n"
+    "  demo                          the demonstration show: status and schedule\n"
+    "  demo run | demo stop          run the show now / cancel it\n"
+    "  demo on|off                   run the show when the launch pin is pulled\n"
     "  led toggle|blink              STAR LED\n"
     "  imu calibrate                 3 s gyro-bias calibration (hold still)\n"
     "  imu align                     zero roll/pitch/yaw at the current attitude\n"
@@ -120,6 +124,10 @@ bool console_execute(const String& lineIn, Print& out) {
   if (!strcmp(cmd, "status")) { console_print_telemetry_frame(out); return true; }
 
   if (!strcmp(cmd, "solar")) {
+    // A human reaching for the wings outranks the demonstration show. Stopping it here, before the
+    // branches below write the wing state, is what stops the show's own idea of that state from
+    // landing on top of the operator's.
+    if (demo_running()) { demo_stop("operator took the servo"); out.println(F("demo: show stopped, you have the servo")); }
     if (!strcasecmp(a1, "deploy")) { aux_send(AUX_CMD_MOTOR_OPEN, 0); params_lock(); g_params.panels_deployed = 1; params_unlock(); params_save(); out.println(F("solar: deploying")); }
     else if (!strcasecmp(a1, "retract")) { aux_send(AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = 0; params_unlock(); params_save(); out.println(F("solar: retracting")); }
     else if (!strcasecmp(a1, "toggle")) { bool dep = !g_params.panels_deployed; aux_send(dep ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = dep; params_unlock(); params_save(); out.println(F("solar: toggled")); }
@@ -210,6 +218,23 @@ bool console_execute(const String& lineIn, Print& out) {
     else if (!strcasecmp(a1, "learn-upright") || !strcasecmp(a1, "learn")) { mission_learn_upright(); out.println(F("mission: upright reference recorded")); }
     else if (!strcasecmp(a1, "auto") && argc > 2) { mission_set_auto(!strcasecmp(a2, "on")); out.printf("mission: automatic triggers %s\n", mission_auto_enabled() ? "armed" : "disabled"); }
     else out.println(F("usage: mission status|separate|abort|learn-upright|auto on|off"));
+    return true;
+  }
+
+  if (!strcmp(cmd, "demo")) {
+    if (argc == 1 || !strcasecmp(a1, "status")) { demo_status(out); }
+    else if (!strcasecmp(a1, "plan")) { demo_print_plan(out); }
+    else if (!strcasecmp(a1, "run") || !strcasecmp(a1, "start")) {
+      if (mission_begin_demo("commanded")) out.println(F("demo: show started -- keep hands clear of the wings"));
+      else out.println(F("demo: could not start (already running, or demo.* leaves nothing to do)"));
+    } else if (!strcasecmp(a1, "stop") || !strcasecmp(a1, "abort")) {
+      if (!demo_running()) out.println(F("demo: not running"));
+      else { demo_stop("stopped by command"); out.println(F("demo: stopped (a sweep already under way still finishes)")); }
+    } else if (!strcasecmp(a1, "on") || !strcasecmp(a1, "off")) {
+      params_lock(); g_params.demo_enabled = !strcasecmp(a1, "on"); params_unlock(); params_save();
+      out.printf("demo: %s\n", g_params.demo_enabled ? "armed -- pulling the launch pin runs the show"
+                                                     : "disarmed -- pulling the launch pin deploys once");
+    } else { out.println(F("usage: demo [status|plan] | demo run|stop | demo on|off")); return true; }
     return true;
   }
 

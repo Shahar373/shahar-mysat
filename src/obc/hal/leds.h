@@ -13,6 +13,7 @@ enum LedState : uint8_t {
   LED_DEPLOY,          // fast amber blink: the servo is moving the panels
   LED_STOWED,          // magenta slow blink: panels folded after being turned over
   LED_ACTIVITY,        // short cyan flash on command / photo, then back to previous
+  LED_DEMO,            // cyan sweep: running the bench demonstration show
 };
 
 void leds_init();
@@ -22,4 +23,5 @@ void leds_tick();               // call at >= 20 Hz from the control tick
 void star_led_set(bool on);
 bool star_led_get();
 void star_led_blink_test();     // 3 blinks then restore, non-blocking
+void star_led_cancel_blink();   // drop a blink test in progress and hand the LED back to star_led_set
 void star_led_tick();
