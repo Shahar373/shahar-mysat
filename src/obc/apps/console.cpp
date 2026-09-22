@@ -124,15 +124,22 @@ bool console_execute(const String& lineIn, Print& out) {
   if (!strcmp(cmd, "status")) { console_print_telemetry_frame(out); return true; }
 
   if (!strcmp(cmd, "solar")) {
+    bool deploy = !strcasecmp(a1, "deploy"), retract = !strcasecmp(a1, "retract"), toggle = !strcasecmp(a1, "toggle");
+    bool angle = !strcasecmp(a1, "angle") && argc > 2;
+    if (!deploy && !retract && !toggle && !angle) { out.println(F("usage: solar deploy|retract|toggle|angle <deg>")); return true; }
     // A human reaching for the wings outranks the demonstration show. Stopping it here, before the
     // branches below write the wing state, is what stops the show's own idea of that state from
-    // landing on top of the operator's.
+    // landing on top of the operator's. Only a real actuation gets this far: a typo must not cost
+    // the audience the routine.
     if (demo_running()) { demo_stop("operator took the servo"); out.println(F("demo: show stopped, you have the servo")); }
-    if (!strcasecmp(a1, "deploy")) { aux_send(AUX_CMD_MOTOR_OPEN, 0); params_lock(); g_params.panels_deployed = 1; params_unlock(); params_save(); out.println(F("solar: deploying")); }
-    else if (!strcasecmp(a1, "retract")) { aux_send(AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = 0; params_unlock(); params_save(); out.println(F("solar: retracting")); }
-    else if (!strcasecmp(a1, "toggle")) { bool dep = !g_params.panels_deployed; aux_send(dep ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = dep; params_unlock(); params_save(); out.println(F("solar: toggled")); }
-    else if (!strcasecmp(a1, "angle") && argc > 2) { uint8_t deg = atoi(a2); aux_send(AUX_CMD_SERVO_ANGLE, deg); out.printf("solar: angle -> %u\n", deg); }
-    else { out.println(F("usage: solar deploy|retract|toggle|angle <deg>")); return true; }
+    // The AUX ignores a movement that arrives while a sweep is running -- it retargets the sweep in
+    // progress without restarting the power window -- so a command landing mid-sweep leaves the
+    // wings part-way while the table records them as done. Refuse it rather than pretend.
+    if (aux_servo_busy()) { out.println(F("solar: servo still moving, try again in a couple of seconds")); return true; }
+    if (deploy) { aux_send(AUX_CMD_MOTOR_OPEN, 0); params_lock(); g_params.panels_deployed = 1; params_unlock(); params_save(); out.println(F("solar: deploying")); }
+    else if (retract) { aux_send(AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = 0; params_unlock(); params_save(); out.println(F("solar: retracting")); }
+    else if (toggle) { bool dep = !g_params.panels_deployed; aux_send(dep ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0); params_lock(); g_params.panels_deployed = dep; params_unlock(); params_save(); out.println(F("solar: toggled")); }
+    else { uint8_t deg = atoi(a2); aux_send(AUX_CMD_SERVO_ANGLE, deg); out.printf("solar: angle -> %u\n", deg); }
     mission_note_manual_actuation();   // a human is driving: stop the automatic flip triggers
     out.println(F("(automatic orientation triggers suspended, re-arm with 'mission auto on')"));
     events_post(EV_MOTOR, g_params.panels_deployed, "solar %s", a1);

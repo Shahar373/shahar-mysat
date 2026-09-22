@@ -29,6 +29,7 @@ static uint32_t    s_runs = 0;            // shows completed since boot
 static uint8_t     s_moves_done = 0;      // servo sweeps issued in this run
 static uint8_t     s_moves_confirmed = 0; // ... of which the AUX reported the expected angle
 static bool        s_panels_out = false;  // what the show believes the wings are doing
+static uint32_t    s_last_servo_ms = 0;   // when the last wing command went out (valid if s_moves_done)
 
 // Rebuilds the schedule from the parameter table. Cheap, so it runs at every start: editing
 // `demo.*` with `params set` takes effect on the next show without a reboot.
@@ -99,7 +100,9 @@ static void enter_step(int i) {
     case DEMO_STEP_PANEL_OPEN:
     case DEMO_STEP_PANEL_CLOSE: {
       bool open = (s.kind == DEMO_STEP_PANEL_OPEN);
-      aux_send(open ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0);
+      if (!aux_send(open ? AUX_CMD_MOTOR_OPEN : AUX_CMD_MOTOR_CLOSE, 0))
+        LOGW("DEMO", "cycle %u: AUX did not acknowledge the wing command, the wings will not move", s.index);
+      s_last_servo_ms = millis();
       s_panels_out = open; s_moves_done++;
       // Mirror the wing state into the live table (RAM only, no NVS write until finish()) so the
       // telemetry frame and the dashboard tell the truth while the show is running.
@@ -162,11 +165,16 @@ void demo_tick() {
   int i = demo_step_at(s_steps, s_nsteps, el, s_cur < 0 ? 0 : s_cur);
   if (i == s_cur) return;
 
-  // Advance one step per tick even when the clock has run past several of them. A tick delayed by
-  // a busy moment must not skip a step: skipping a PANEL_CLOSE would leave the wings out while the
+  // Advance one step per tick even when the clock has run past several of them, so a tick delayed
+  // by a busy moment never skips a step: skipping a PANEL_CLOSE would leave the wings out while the
   // show still believes it folded them, and skipping a LIGHT_OFF would merge two flashes into one.
-  // At a 50 ms tick against steps of 400 ms and up, catching up takes a handful of passes.
   if (i > s_cur + 1) i = s_cur + 1;
+
+  // Catching up must not squeeze two wing commands together either. The schedule keeps them
+  // AUX_SERVO_MIN_CMD_GAP_MS apart on paper; this holds the line at run time too, so if the task
+  // ever stalls for longer than a whole step the show slips instead of the servo.
+  if (demo_step_moves_servo(s_steps[i].kind) && s_moves_done > 0 &&
+      millis() - s_last_servo_ms < AUX_SERVO_MIN_CMD_GAP_MS) return;
 
   if (s_cur >= 0 && demo_step_moves_servo(s_steps[s_cur].kind))
     confirm_move(s_steps[s_cur].kind, s_steps[s_cur].index);

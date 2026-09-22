@@ -36,4 +36,5 @@ bool aux_read_status(AuxStatus& out) {
 }
 
 bool aux_present() { return s_present; }
+bool aux_servo_busy() { AuxStatus st; return aux_read_status(st) && st.servo_state != AUX_SERVO_OFF; }
 void aux_heartbeat(uint8_t mode) { aux_send(AUX_CMD_HEARTBEAT, mode); }

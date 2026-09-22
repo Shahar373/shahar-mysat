@@ -53,7 +53,10 @@ times. Off by default -- arm it once with `demo on` and the setting survives ref
 | `demo on` / `demo off` | run the show when the launch pin is pulled, or go back to the normal single deployment |
 
 While the show runs the mission phase is `DEMO` and the SIGNAL LED breathes cyan, turning amber
-whenever the servo is moving. Any `solar ...` command stops the show and hands you the servo.
+whenever the servo is moving. Any `solar ...` command stops the show and hands you the servo; if a
+sweep is still in progress at that moment the command is refused with `servo still moving`, and you
+send it again a couple of seconds later. That refusal applies to manual commands in general: the
+AUX cannot restart a sweep half way, so the console will not ask it to.
 
 `demo stop` stops the *schedule*. It cannot abort a sweep already in progress: once commanded, the
 AUX controller drives the servo from its own timer and the protocol has no halt -- which is
@@ -74,7 +77,7 @@ deliberate, since stopping half way is worse for the mechanism than finishing th
 | `demo.settle_ms` | `1500` | pause between the wing act and the light act |
 | `demo.end_deployed` | `0` | `1` = one extra deploy at the end, so the show finishes wings-out |
 
-The default show takes about 29 seconds. `demo plan` prints the resulting timeline and the closest
+The default show takes 30.5 seconds. `demo plan` prints the resulting timeline and the closest
 spacing between two servo commands, which the firmware will not let you set below
 `AUX_SERVO_MIN_CMD_GAP_MS` (2400 ms): the AUX controller detaches the servo once the commanded
 angle is reached (about 1.6 s for a full sweep) but keeps it powered for up to 2.2 s if the

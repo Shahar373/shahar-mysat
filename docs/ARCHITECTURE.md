@@ -178,7 +178,7 @@ the show rather than the launch sequence above.
    front light on 3 s, off 1 s, 3x        STAR LED on GPIO14
           |
           v
-   [NOMINAL] or [STOWED] depending on where the wings ended  (~29 s in total)
+   [NOMINAL] or [STOWED] depending on where the wings ended  (30.5 s in total)
 ```
 
 Three things make this more than a list of delays:

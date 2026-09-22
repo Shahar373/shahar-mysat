@@ -69,7 +69,8 @@ struct DemoStep {
   uint32_t duration_ms;
 };
 
-// Worst case with the clamped maxima below: 1 arm + 8*4 panel + 1 settle + 12*2 light + 2 = 60.
+// Worst case with the clamped maxima below: 1 arm + 8*4 panel + 1 settle + 12*2 light + 1 settle
+// + 1 final open + 1 done = 61.
 #define DEMO_MAX_STEPS   64
 #define DEMO_MAX_CYCLES  8
 #define DEMO_MAX_FLASHES 12
