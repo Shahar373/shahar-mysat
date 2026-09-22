@@ -125,8 +125,8 @@ The boot banner prints the reset reason it saw (`POWERON`, `SOFTWARE`, `TASK_WDT
 an upload it reports something other than `POWERON`, the automatic sequence will not have run --
 pull the power pin for a genuine cold start, or use `mission separate`.
 
-A step-by-step walkthrough of all of the above for a first-time flasher, in Hebrew, is in
-`docs/INSTALL.he.md`.
+A step-by-step walkthrough of all of the above for a first-time flasher is in `docs/INSTALL.md`
+(English) and `docs/INSTALL.he.md` (Hebrew).
 
 ## First boot checklist
 

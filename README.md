@@ -42,8 +42,8 @@ servo commands closer together than the Nano can actually carry out. It is off b
 once with `demo on` (the setting lives in NVS and survives reflashing), or run it any time with
 `demo run`. Everything about it is tunable from `demo.*` parameters. See `docs/COMMANDS.md`.
 It works with the Nano firmware the kit ships with (full sweeps, no confirmation) and gets gentler
-sweeps and position confirmation once `src/aux/` is flashed. `docs/INSTALL.he.md` walks through
-the whole installation step by step.
+sweeps and position confirmation once `src/aux/` is flashed. `docs/INSTALL.md` (English) and
+`docs/INSTALL.he.md` (Hebrew) walk through the whole installation step by step.
 
 ## The deployment sequence
 

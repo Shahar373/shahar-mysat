@@ -24,7 +24,7 @@
 
 ## שלב 3: להוריד את הקוד
 
-1. מורידים את הקובץ הזה: https://github.com/Shahar373/shahar-mysat/archive/refs/heads/claude/kind-turing-9gexz1.zip
+1. נכנסים ל-https://github.com/Shahar373/shahar-mysat, לוחצים על הכפתור הירוק **Code**, ואז **Download ZIP**.
 2. מחלצים אותו. מתקבלת תיקייה עם שם ארוך. משנים את שמה ל-`mysat` ומעבירים למקום פשוט, למשל `C:\mysat` ב-Windows או `~/mysat` ב-Mac.
 3. בודקים שבתוך התיקייה יש קובץ בשם `platformio.ini`. אם הוא בתיקייה פנימית, זו התיקייה שצריך.
 
