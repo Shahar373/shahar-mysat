@@ -7,6 +7,7 @@
 #include "params_def.h"
 #include "cmdline.h"
 #include "attitude_trigger.h"
+#include "demo_show.h"
 
 // ---------------------------------------------------------------- crc.h
 void test_crc8_known_vector() {
@@ -218,9 +219,324 @@ void test_params_mission_keys_are_settable() {
   TEST_ASSERT_FALSE(params_set_from_str(p, *d, "99999"));
 }
 
+
+// ---------------------------------------------------------------- demo_show.h
+// The demonstration show drives a servo, so its schedule is worth testing off-hardware: the
+// interesting properties are "it does what the owner asked" and "it never commands the mechanism
+// faster than the AUX controller can carry out".
+static int demo_count_kind(const DemoStep* st, int n, uint8_t kind) {
+  int c = 0;
+  for (int i = 0; i < n; i++) if (st[i].kind == kind) c++;
+  return c;
+}
+
+void test_demo_default_show_is_what_was_asked_for() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_GREATER_THAN_INT(0, n);
+  // wings out and back, twice
+  TEST_ASSERT_EQUAL_INT(2, demo_count_kind(st, n, DEMO_STEP_PANEL_OPEN));
+  TEST_ASSERT_EQUAL_INT(2, demo_count_kind(st, n, DEMO_STEP_PANEL_CLOSE));
+  // then the front light on for three seconds, three times
+  TEST_ASSERT_EQUAL_INT(3, demo_count_kind(st, n, DEMO_STEP_LIGHT_ON));
+  for (int i = 0; i < n; i++)
+    if (st[i].kind == DEMO_STEP_LIGHT_ON) TEST_ASSERT_EQUAL_UINT32(3000, st[i].duration_ms);
+}
+
+void test_demo_panels_finish_before_the_light_starts() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  uint32_t lastServo = 0, firstLight = 0xFFFFFFFFu;
+  for (int i = 0; i < n; i++) {
+    if (demo_step_moves_servo(st[i].kind)) lastServo = st[i].start_ms + st[i].duration_ms;
+    if (st[i].kind == DEMO_STEP_LIGHT_ON && st[i].start_ms < firstLight) firstLight = st[i].start_ms;
+  }
+  TEST_ASSERT_TRUE(firstLight >= lastServo);
+}
+
+// The reason the schedule exists at all: the AUX controller powers the servo for
+// AUX_SERVO_POWER_MS and ignores a new movement while one is running, so two commands closer
+// together than AUX_SERVO_MIN_CMD_GAP_MS give one half-finished sweep instead of two sweeps.
+void test_demo_never_commands_the_servo_faster_than_aux_can_move_it() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_TRUE(demo_min_servo_gap_ms(st, n) >= AUX_SERVO_MIN_CMD_GAP_MS);
+}
+
+void test_demo_sanitize_restores_the_servo_spacing() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  c.panel_move_ms = AUX_SERVO_POWER_MS;   // legal on its own...
+  c.panel_rest_ms = 0;                    // ...but back-to-back this is too fast
+  TEST_ASSERT_TRUE(demo_cfg_sanitize(c));
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_TRUE(demo_min_servo_gap_ms(st, n) >= AUX_SERVO_MIN_CMD_GAP_MS);
+}
+
+void test_demo_sanitize_clamps_absurd_values() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  c.panel_cycles = 250; c.light_flashes = 250; c.panel_move_ms = 10; c.light_on_ms = 0;
+  TEST_ASSERT_TRUE(demo_cfg_sanitize(c));
+  TEST_ASSERT_EQUAL_UINT8(DEMO_MAX_CYCLES, c.panel_cycles);
+  TEST_ASSERT_EQUAL_UINT8(DEMO_MAX_FLASHES, c.light_flashes);
+  TEST_ASSERT_TRUE(c.panel_move_ms >= AUX_SERVO_POWER_MS);
+  TEST_ASSERT_TRUE(c.light_on_ms >= 50);
+}
+
+void test_demo_largest_allowed_show_still_fits_the_step_table() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  c.panel_cycles = DEMO_MAX_CYCLES; c.light_flashes = DEMO_MAX_FLASHES; c.end_deployed = 1;
+  demo_cfg_sanitize(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  TEST_ASSERT_GREATER_THAN_INT(0, demo_build_steps(c, st, DEMO_MAX_STEPS));  // 0 means it overflowed
+}
+
+void test_demo_step_lookup_walks_the_schedule_in_order() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_EQUAL_INT(0, demo_step_at(st, n, 0));
+  for (int i = 0; i < n; i++) {
+    if (st[i].kind == DEMO_STEP_DONE) break;
+    TEST_ASSERT_EQUAL_INT(i, demo_step_at(st, n, st[i].start_ms));                     // first ms
+    TEST_ASSERT_EQUAL_INT(i, demo_step_at(st, n, st[i].start_ms + st[i].duration_ms - 1)); // last ms
+  }
+  // past the end it parks on DONE and stays there
+  TEST_ASSERT_EQUAL_INT(n - 1, demo_step_at(st, n, demo_total_ms(st, n) + 60000));
+  TEST_ASSERT_EQUAL_UINT8(DEMO_STEP_DONE, st[n - 1].kind);
+}
+
+// The runner passes the previous answer back as a hint so the usual "still the same step" case is
+// one comparison. That optimisation must not change the answer, which is what this walks over.
+void test_demo_step_lookup_hint_agrees_with_a_full_scan() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  int hint = 0;
+  for (uint32_t t = 0; t < demo_total_ms(st, n) + 2000; t += 37) {
+    int scanned = demo_step_at(st, n, t, 0);
+    hint = demo_step_at(st, n, t, hint);       // fed forward exactly as the runner does
+    TEST_ASSERT_EQUAL_INT(scanned, hint);
+  }
+}
+
+// Every millisecond of the show is covered by exactly one step, with no gap and no overlap --
+// a hole would leave the runner executing nothing, an overlap would skip a servo command.
+void test_demo_steps_tile_the_timeline_without_gaps() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_EQUAL_UINT32(0, st[0].start_ms);
+  for (int i = 1; i < n; i++)
+    TEST_ASSERT_EQUAL_UINT32(st[i - 1].start_ms + st[i - 1].duration_ms, st[i].start_ms);
+}
+
+// The front light must not be left burning when the show ends -- the runner turns it off, and the
+// schedule has to agree by finishing on an off step rather than an on one.
+void test_demo_show_does_not_end_with_the_light_on() {
+  DemoShowCfg c; demo_cfg_defaults(c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_FALSE(demo_step_light_on(st[n - 2].kind));
+}
+
+void test_demo_end_deployed_adds_a_final_sweep() {
+  DemoShowCfg a; demo_cfg_defaults(a); a.end_deployed = 0;
+  DemoShowCfg b; demo_cfg_defaults(b); b.end_deployed = 1;
+  DemoStep sa[DEMO_MAX_STEPS], sb[DEMO_MAX_STEPS];
+  int na = demo_build_steps(a, sa, DEMO_MAX_STEPS);
+  int nb = demo_build_steps(b, sb, DEMO_MAX_STEPS);
+  TEST_ASSERT_EQUAL_INT(demo_servo_move_count(sa, na) + 1, demo_servo_move_count(sb, nb));
+  TEST_ASSERT_TRUE(demo_min_servo_gap_ms(sb, nb) >= AUX_SERVO_MIN_CMD_GAP_MS);
+}
+
+void test_demo_zero_cycles_leaves_only_the_light() {
+  DemoShowCfg c; demo_cfg_defaults(c); c.panel_cycles = 0;
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_EQUAL_INT(0, demo_servo_move_count(st, n));
+  TEST_ASSERT_EQUAL_INT(3, demo_count_kind(st, n, DEMO_STEP_LIGHT_ON));
+}
+
+// ---------------------------------------------------------------- v1 (stock Nano) compatibility
+// The kit's own Nano firmware keeps only the last byte of an I2C write. A v2 frame's last byte is
+// its CRC, so frames must never reach it; these pin down both the hazard and the rule.
+void test_aux_legacy_equivalent_maps_the_wing_commands() {
+  TEST_ASSERT_EQUAL_INT(AUX_LEGACY_MOTOR_OPEN,  aux_legacy_equivalent(AUX_CMD_MOTOR_OPEN, 0));
+  TEST_ASSERT_EQUAL_INT(AUX_LEGACY_MOTOR_CLOSE, aux_legacy_equivalent(AUX_CMD_MOTOR_CLOSE, 0));
+  TEST_ASSERT_EQUAL_INT(AUX_LEGACY_RF_SET,      aux_legacy_equivalent(AUX_CMD_RF_SET, 1));
+}
+void test_aux_legacy_equivalent_drops_what_v1_cannot_do() {
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_HEARTBEAT, 2));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_LED, 1));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_SERVO_ANGLE, 90));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_RF_SET, 0));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_RF_POWER, 1));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_NOP, 0));
+}
+// Why the rule exists: for some arguments a frame's CRC byte is exactly the v1 code for "open"
+// or "close". Angle 41 is one of them (CRC 0x00). Sent as a frame to the stock firmware it would
+// deploy the wings; the mapping above turns it into "not sent" instead.
+void test_aux_frame_crc_can_collide_with_a_v1_wing_command() {
+  uint8_t f[3] = { AUX_FRAME_MAGIC, AUX_CMD_SERVO_ANGLE, 41 };
+  TEST_ASSERT_EQUAL_HEX8(AUX_LEGACY_MOTOR_OPEN, crc8_smbus(f, 3));
+  TEST_ASSERT_EQUAL_INT(-1, aux_legacy_equivalent(AUX_CMD_SERVO_ANGLE, 41));
+}
+// ... and the two wing commands the OBC does send are, by luck, ignored rather than misread if a
+// frame ever did slip through: their CRCs are not 0 or 1. Recorded so a future ICD change that
+// makes them collide is noticed.
+void test_aux_wing_frames_are_at_least_ignored_by_v1() {
+  uint8_t o[3] = { AUX_FRAME_MAGIC, AUX_CMD_MOTOR_OPEN, 0 };
+  uint8_t c[3] = { AUX_FRAME_MAGIC, AUX_CMD_MOTOR_CLOSE, 0 };
+  TEST_ASSERT_TRUE(crc8_smbus(o, 3) > AUX_LEGACY_RF_SET);
+  TEST_ASSERT_TRUE(crc8_smbus(c, 3) > AUX_LEGACY_RF_SET);
+}
+
+void test_params_demo_angle_and_fade_keys() {
+  Params p; params_set_defaults(p);
+  TEST_ASSERT_EQUAL_UINT8(15, p.demo_open_deg);
+  TEST_ASSERT_EQUAL_UINT8(165, p.demo_closed_deg);
+  TEST_ASSERT_EQUAL_UINT16(300, p.demo_fade_ms);
+  const ParamDesc* d = params_find("demo.open_deg");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_TRUE(params_set_from_str(p, *d, "10"));
+  TEST_ASSERT_EQUAL_UINT8(10, p.demo_open_deg);
+  TEST_ASSERT_FALSE(params_set_from_str(p, *d, "200"));
+  d = params_find("demo.fade_ms");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_FALSE(params_set_from_str(p, *d, "5000"));
+  p.demo_fade_ms = 9000; p.demo_closed_deg = 250;
+  TEST_ASSERT_TRUE(params_sanitize(p));
+  TEST_ASSERT_EQUAL_UINT16(2000, p.demo_fade_ms);
+  TEST_ASSERT_EQUAL_UINT8(180, p.demo_closed_deg);
+}
+
+// ---------------------------------------------------------------- params v2 -> v3 migration
+// Adding the demo.* fields changed sizeof(Params), so every table written by the previous firmware
+// fails params_check(). Without a migration path that silently costs the owner their callsign,
+// WiFi credentials, gyro calibration and learned upright vector on the first boot after a flash.
+static void build_fake_v2_blob(uint8_t* buf, const Params& src) {
+  memcpy(buf, &src, PARAMS_V2_PAYLOAD_BYTES);
+  uint16_t ver = 2, size = PARAMS_V2_SIZE_BYTES;
+  memcpy(buf + offsetof(Params, version), &ver, sizeof ver);
+  memcpy(buf + offsetof(Params, size), &size, sizeof size);
+  uint32_t crc = crc32_ieee(buf, PARAMS_V2_PAYLOAD_BYTES);
+  memcpy(buf + PARAMS_V2_PAYLOAD_BYTES, &crc, sizeof crc);
+}
+
+void test_params_migration_keeps_the_owners_settings() {
+  Params old; params_set_defaults(old);
+  params_set_str(old.callsign, sizeof old.callsign, "4X1ABC");
+  params_set_str(old.wifi_ssid, sizeof old.wifi_ssid, "home-net");
+  params_set_str(old.wifi_pass, sizeof old.wifi_pass, "hunter2");
+  old.wifi_mode = 1; old.imu_calibrated = 1; old.gyro_bias[0] = -123; old.gyro_bias[2] = 45;
+  old.up_ref_valid = 1; old.up_ref[0] = 0.0f; old.up_ref[1] = 0.0f; old.up_ref[2] = 1.0f;
+  old.deploy_inhibit_s = 1800; old.panels_deployed = 1;
+
+  uint8_t blob[PARAMS_V2_SIZE_BYTES];
+  build_fake_v2_blob(blob, old);
+
+  Params up;
+  TEST_ASSERT_TRUE(params_try_migrate(up, blob, sizeof blob));
+  TEST_ASSERT_TRUE(params_check(up));
+  TEST_ASSERT_EQUAL_STRING("4X1ABC", up.callsign);
+  TEST_ASSERT_EQUAL_STRING("home-net", up.wifi_ssid);
+  TEST_ASSERT_EQUAL_STRING("hunter2", up.wifi_pass);
+  TEST_ASSERT_EQUAL_UINT8(1, up.wifi_mode);
+  TEST_ASSERT_EQUAL_UINT8(1, up.imu_calibrated);
+  TEST_ASSERT_EQUAL_INT16(-123, up.gyro_bias[0]);
+  TEST_ASSERT_EQUAL_INT16(45, up.gyro_bias[2]);
+  TEST_ASSERT_EQUAL_UINT8(1, up.up_ref_valid);
+  TEST_ASSERT_EQUAL_UINT16(1800, up.deploy_inhibit_s);
+  TEST_ASSERT_EQUAL_UINT8(1, up.panels_deployed);
+}
+
+void test_params_migration_fills_demo_fields_with_defaults() {
+  Params old; params_set_defaults(old);
+  uint8_t blob[PARAMS_V2_SIZE_BYTES];
+  build_fake_v2_blob(blob, old);
+  Params up;
+  TEST_ASSERT_TRUE(params_try_migrate(up, blob, sizeof blob));
+  TEST_ASSERT_EQUAL_UINT8(0, up.demo_enabled);        // the show stays off until asked for
+  TEST_ASSERT_EQUAL_UINT8(2, up.demo_panel_cycles);
+  TEST_ASSERT_EQUAL_UINT8(3, up.demo_light_flashes);
+  TEST_ASSERT_EQUAL_UINT16(3000, up.demo_light_on_ms);
+}
+
+void test_params_migration_rejects_a_corrupt_blob() {
+  Params old; params_set_defaults(old);
+  uint8_t blob[PARAMS_V2_SIZE_BYTES];
+  build_fake_v2_blob(blob, old);
+  blob[12] ^= 0x40;                                   // flip a bit inside the payload
+  Params up; params_set_defaults(up);
+  TEST_ASSERT_FALSE(params_try_migrate(up, blob, sizeof blob));
+}
+
+void test_params_migration_rejects_the_wrong_size() {
+  Params cur; params_set_defaults(cur); params_seal(cur);
+  Params up;
+  TEST_ASSERT_FALSE(params_try_migrate(up, &cur, sizeof cur));   // a v3 table is not a v2 table
+}
+
+void test_params_demo_keys_are_settable() {
+  Params p; params_set_defaults(p);
+  const ParamDesc* d = params_find("demo.enabled");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_TRUE(params_set_from_str(p, *d, "1"));
+  TEST_ASSERT_EQUAL_UINT8(1, p.demo_enabled);
+  d = params_find("demo.light_on_ms");
+  TEST_ASSERT_NOT_NULL(d);
+  TEST_ASSERT_TRUE(params_set_from_str(p, *d, "5000"));
+  TEST_ASSERT_EQUAL_UINT16(5000, p.demo_light_on_ms);
+  d = params_find("demo.panel_move_ms");
+  TEST_ASSERT_FALSE(params_set_from_str(p, *d, "10"));   // below the AUX servo window
+}
+
+// A stored table whose demo values would over-drive the servo has to come back safe, not fast.
+void test_params_sanitize_fixes_unsafe_demo_timing() {
+  Params p; params_set_defaults(p);
+  p.demo_panel_move_ms = AUX_SERVO_POWER_MS;
+  p.demo_panel_rest_ms = 0;
+  TEST_ASSERT_TRUE(params_sanitize(p));
+  DemoShowCfg c; params_get_demo_cfg(p, c);
+  DemoStep st[DEMO_MAX_STEPS];
+  int n = demo_build_steps(c, st, DEMO_MAX_STEPS);
+  TEST_ASSERT_TRUE(demo_min_servo_gap_ms(st, n) >= AUX_SERVO_MIN_CMD_GAP_MS);
+}
+
+// Real Unity (pio test -e native) calls these around every test; the offline shim does not.
+void setUp() {}
+void tearDown() {}
+
 int main(int argc, char** argv) {
   (void)argc; (void)argv;
   UNITY_BEGIN();
+  RUN_TEST(test_demo_default_show_is_what_was_asked_for);
+  RUN_TEST(test_demo_panels_finish_before_the_light_starts);
+  RUN_TEST(test_demo_never_commands_the_servo_faster_than_aux_can_move_it);
+  RUN_TEST(test_demo_sanitize_restores_the_servo_spacing);
+  RUN_TEST(test_demo_sanitize_clamps_absurd_values);
+  RUN_TEST(test_demo_largest_allowed_show_still_fits_the_step_table);
+  RUN_TEST(test_demo_step_lookup_walks_the_schedule_in_order);
+  RUN_TEST(test_demo_step_lookup_hint_agrees_with_a_full_scan);
+  RUN_TEST(test_demo_steps_tile_the_timeline_without_gaps);
+  RUN_TEST(test_demo_show_does_not_end_with_the_light_on);
+  RUN_TEST(test_demo_end_deployed_adds_a_final_sweep);
+  RUN_TEST(test_demo_zero_cycles_leaves_only_the_light);
+  RUN_TEST(test_params_migration_keeps_the_owners_settings);
+  RUN_TEST(test_params_migration_fills_demo_fields_with_defaults);
+  RUN_TEST(test_params_migration_rejects_a_corrupt_blob);
+  RUN_TEST(test_params_migration_rejects_the_wrong_size);
+  RUN_TEST(test_params_demo_keys_are_settable);
+  RUN_TEST(test_params_sanitize_fixes_unsafe_demo_timing);
+  RUN_TEST(test_aux_legacy_equivalent_maps_the_wing_commands);
+  RUN_TEST(test_aux_legacy_equivalent_drops_what_v1_cannot_do);
+  RUN_TEST(test_aux_frame_crc_can_collide_with_a_v1_wing_command);
+  RUN_TEST(test_aux_wing_frames_are_at_least_ignored_by_v1);
+  RUN_TEST(test_params_demo_angle_and_fade_keys);
   RUN_TEST(test_crc8_known_vector);
   RUN_TEST(test_crc8_changes_on_bit_flip);
   RUN_TEST(test_crc32_known_vector);

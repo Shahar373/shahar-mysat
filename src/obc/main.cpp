@@ -29,6 +29,7 @@
 #include "apps/wifi.h"
 #include "apps/web.h"
 #include "apps/mission.h"
+#include "apps/demo.h"
 #include "mysat_icd.h"
 
 static uint32_t s_boot_ms;
@@ -38,6 +39,15 @@ static uint32_t s_boot_ms;
 // to see from across the room.
 static uint8_t current_led_state() {
   for (int i = 0; i < DEV_COUNT; i++) if (fdir_dev((DeviceId)i).failed) return LED_FAULT;
+  // During the demonstration show the light says which act is running -- a tick per second while
+  // it counts down, amber while the wings move, cyan otherwise -- so a visitor can read the
+  // routine without the console. It outranks the boot animation because the countdown starts
+  // inside the boot window when the show is armed on the launch pin.
+  if (mission_phase() == MPHASE_DEMO) {
+    uint8_t k = demo_step_kind();
+    if (k == DEMO_STEP_ARM) return LED_DEMO_ARM;
+    return demo_step_moves_servo(k) ? LED_DEPLOY : LED_DEMO;
+  }
   if (millis() - s_boot_ms < 5000) return LED_BOOT;
   switch (mission_phase()) {
     case MPHASE_LEOP: return LED_LEOP;
@@ -130,6 +140,7 @@ void setup() {
   logger_init();
   if (!camera_init()) LOGW("MAIN", "camera not present or failed to init (non-fatal, secondary payload)");
 
+  demo_init();
   sensors_task_start();
   mission_task_start();
   console_task_start();

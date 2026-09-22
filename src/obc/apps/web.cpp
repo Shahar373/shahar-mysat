@@ -5,12 +5,14 @@
 #include "apps/camera_app.h"
 #include "core/bus.h"
 #include "core/events.h"
+#include "core/log.h"
 #include "core/fdir.h"
 #include "core/mission_clock.h"
 #include "core/params_store.h"
 #include "hal/leds.h"
 #include "hal/nano_link.h"
 #include "apps/mission.h"
+#include "apps/demo.h"
 #include "attitude_trigger.h"
 #include <WebServer.h>
 #include <LittleFS.h>
@@ -65,9 +67,15 @@ static void handle_hk() {
   ms["orientation"] = orientation_str(hk.orientation);
   ms["auto"] = mission_auto_enabled();
   ms["upright_ref"] = (bool)g_params.up_ref_valid;
+  JsonObject dm = doc.createNestedObject("demo");
+  dm["armed"] = (bool)g_params.demo_enabled;
+  dm["running"] = demo_running();
+  dm["step"] = demo_step_str(demo_step_kind());
+  dm["remaining_s"] = demo_remaining_s();
   doc["wifi"]["mode"] = hk.wifi_mode; doc["wifi"]["connected"] = hk.wifi_connected;
   doc["wifi"]["rssi"] = hk.wifi_rssi; doc["wifi"]["ip"] = hk.ip;
   doc["aux"]["present"] = hk.aux_ok;
+  doc["aux"]["protocol"] = aux_protocol_str();
   if (hk.aux_ok) {
     doc["aux"]["servo_angle"] = hk.aux.servo_angle; doc["aux"]["servo_state"] = hk.aux.servo_state;
     doc["aux"]["hb_age_s"] = hk.aux.hb_age_s; doc["aux"]["boot_flags"] = hk.aux.boot_flags;
@@ -148,6 +156,7 @@ small{color:#98a5bc}
 <button onclick="cmd('solar deploy')">Deploy panels</button>
 <button onclick="cmd('solar retract')">Retract panels</button>
 <button onclick="cmd('led toggle')">Toggle LED</button>
+<button onclick="cmd('demo run')">Run demo show</button>
 <button onclick="fetch('/api/photo/capture').then(()=>log('photo captured'))">Take photo</button>
 </div>
 <div class="row" style="width:100%">

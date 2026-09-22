@@ -13,13 +13,10 @@ pio run -e aux         # Arduino Nano auxiliary firmware
 pio test -e native     # portable core logic, runs on your machine, no board needed
 ```
 
-The first `pio run` for a target downloads its toolchain and libraries — this needs real internet
-access (this repo was built in a network-isolated sandbox where those downloads were blocked, so
-`obc` in particular has not been compiled end-to-end yet; see the note at the bottom of
-`docs/ARCHITECTURE.md`). Expect to fix a handful of real compiler errors on your first build —
-that's normal for a from-scratch rewrite this size, and every third-party library call was checked
-by hand against the actual vendored headers, so errors should be typos/API drift, not design
-mistakes.
+The first `pio run` for a target downloads its toolchain and libraries, which needs real internet
+access. All three targets do build: `obc` links at about 1.06 MB of the 3 MB app slot against
+Arduino-ESP32 2.0.17 — see the bottom of `docs/ARCHITECTURE.md` for how that is verified, and
+`tools/build_obc.sh` below if the PlatformIO registry is blocked where you are.
 
 ## Flash
 
@@ -34,7 +31,8 @@ pio run -e obc -t uploadfs      # uploads data/index.html to LittleFS — do thi
 pio device monitor -e obc
 ```
 
-**Arduino Nano (`aux`)** flashes over its own USB port:
+**Arduino Nano (`aux`)** flashes over its own USB port, and is optional at first -- see "Which
+Nano firmware you have" below:
 
 ```
 pio run -e aux -t upload
@@ -46,8 +44,9 @@ If upload fails with `"not in sync"` or similar, your board likely has the old b
 ## Verifying without a board (what was actually run while building this)
 
 ```
-tools/run_native_tests.sh        # compiles + runs the 20 tests in test/test_core with plain g++
+tools/run_native_tests.sh        # compiles + runs the 52 tests in test/test_core with plain g++
 tools/build_aux.sh <avr-core> <avr-servo>   # a real avr-gcc build of the Nano firmware
+tools/build_obc.sh               # a real arduino-cli build of the ESP32-CAM firmware
 ```
 
 `run_native_tests.sh` has no dependencies beyond a working `g++`. `build_aux.sh` needs `gcc-avr` /
@@ -60,10 +59,47 @@ git clone --depth 1 https://github.com/arduino-libraries/Servo.git /tmp/avr-serv
 tools/build_aux.sh /tmp/avr-core /tmp/avr-servo
 ```
 
-Both scripts exist specifically because the PlatformIO and Arduino package registries were
-unreachable in the sandbox this project started in; once you have normal internet access, `pio run`
-and `pio test` are the more convenient day-to-day commands and do the same thing (plus the ESP32
-side, which these scripts don't cover).
+`build_obc.sh` fetches what it needs itself (arduino-cli, Arduino-ESP32 2.0.17, the xtensa
+toolchain, and the `lib_deps` libraries from their upstream GitHub repositories — about 350 MB,
+cached in `.build/toolchain` afterwards) and then compiles in roughly 30 seconds:
+
+```
+tools/build_obc.sh               # -> .build/obc/obc_sketch.ino.bin
+tools/build_obc.sh --fetch-only  # just populate .build/toolchain
+```
+
+All three scripts exist because the PlatformIO and Arduino package registries are unreachable in
+some environments, including the sandbox this project started in; they pull only from GitHub
+release assets and PyPI. With normal internet access `pio run` and `pio test` are the more
+convenient day-to-day commands and do the same thing.
+
+## Which Nano firmware you have matters less than it used to
+
+The OBC probes the Nano at boot. If it answers a status read it is the v2 firmware from `src/aux/`
+and the full protocol is used. If it does not, it is the firmware the kit ships with, and the OBC
+switches to that firmware's single-byte commands: wings open and close still work, arbitrary
+angles, the heartbeat and the position readback do not, and the console says
+`stock firmware, no readback`. That means you can flash the ESP32-CAM first and see everything
+work before touching the Nano. Flash the Nano when convenient; the OBC notices on the next boot.
+
+The one thing the OBC never does is send its framed commands to the stock firmware: that firmware
+keeps only the last byte of a message, which for a frame is its checksum, and for two checksum
+values it would read that as a wing command.
+
+## Running the demonstration show instead
+
+If what you want on the bench is the show — wings out and back twice, then the front light on for
+three seconds three times — arm it once:
+
+```
+demo on
+```
+
+That is stored in NVS and survives reflashing. From then on, pulling the launch pin runs the show
+instead of the deployment sequence below, and the same warnings apply, more so: the show moves the
+servo **four times** rather than once, so the wings must be free before you power up. `demo off`
+goes back to the normal single deployment, `demo run` runs the show on demand without a power
+cycle, and `demo` prints the schedule. Full reference in `docs/COMMANDS.md`.
 
 ## Before the first power-up: the servo will move
 
@@ -89,6 +125,9 @@ The boot banner prints the reset reason it saw (`POWERON`, `SOFTWARE`, `TASK_WDT
 an upload it reports something other than `POWERON`, the automatic sequence will not have run --
 pull the power pin for a genuine cold start, or use `mission separate`.
 
+A step-by-step walkthrough of all of the above for a first-time flasher is in `docs/INSTALL.md`
+(English) and `docs/INSTALL.he.md` (Hebrew).
+
 ## First boot checklist
 
 1. `pio device monitor -e obc` and watch the boot banner — it prints the firmware version, boot
@@ -103,3 +142,13 @@ pull the power pin for a genuine cold start, or use `mission separate`.
 6. Test the flip behaviour: with the panels deployed, turn the satellite upside down and hold it
    there. After two seconds the panels fold and the SIGNAL LED turns magenta. Turn it back upright
    and they deploy again.
+7. Optional: `demo run` to watch the demonstration show once with the wings free, before arming it
+   on the launch pin with `demo on`.
+
+## Upgrading from the previous firmware
+
+The parameter table gained the `demo.*` fields, so it is version 3 where the previous firmware
+wrote version 2. It is upgraded in place on the first boot: your callsign, WiFi credentials, gyro
+calibration and learned upright reference are kept, and the new fields take their defaults. The
+event log records `params upgraded v2 -> v3, settings kept`. A table that fails its CRC still falls
+back to the golden copy and then to defaults, exactly as before.

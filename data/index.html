@@ -49,6 +49,7 @@
   .mission .countdown{font-family:ui-monospace,monospace;color:var(--accent);font-size:1.1rem}
   .mission.leop{border-left-color:var(--warn)} .mission.stowed{border-left-color:#c48be0}
   .mission.nominal{border-left-color:var(--ok)}
+  .mission.demo{border-left-color:#3fd0d8}
   code{background:var(--surface2);padding:1px 5px;border-radius:4px;font-family:ui-monospace,monospace}
 </style>
 </head>
@@ -89,6 +90,16 @@
     </div>
     <div class="hint">These call the same commands as the serial console and <code>/api/cmd</code>. Driving the
       panels by hand suspends the automatic flip triggers until you re-arm them.</div>
+    <div class="actions">
+      <button onclick="cmd('demo run')">Run demonstration show</button>
+      <button onclick="cmd('demo stop')">Stop show</button>
+      <button onclick="cmd('demo on')">Run it on the launch pin</button>
+      <button onclick="cmd('demo off')">Back to normal deployment</button>
+      <button onclick="cmd('demo')">Show schedule</button>
+    </div>
+    <div class="hint">The demonstration show is the bench routine: the wings deploy and fold back
+      twice, then the front light turns on for three seconds, three times. Keep hands clear of the
+      wings while it runs.</div>
     <div class="actions">
       <button onclick="cmd('mission separate')">Trigger separation (launch sequence)</button>
       <button onclick="cmd('mission abort')">Abort deployment</button>
@@ -152,10 +163,16 @@ async function poll() {
     const banner = $('missionBanner');
     if (m.phase) {
       banner.hidden = false;
-      banner.className = 'mission ' + (m.phase === 'LEOP' || m.phase === 'DEPLOYING' ? 'leop' : (m.phase === 'STOWED' ? 'stowed' : 'nominal'));
-      $('missionPhase').textContent = m.phase;
-      $('missionOrient').textContent = m.orientation + (m.auto ? '' : ' — auto triggers off') + (m.upright_ref ? '' : ' — no upright reference yet');
-      $('missionCountdown').textContent = m.countdown_s ? ('deploy in ' + m.countdown_s + 's') : '';
+      const d = hk.demo || {};
+      banner.className = 'mission ' + (d.running ? 'demo' :
+        (m.phase === 'LEOP' || m.phase === 'DEPLOYING' ? 'leop' : (m.phase === 'STOWED' ? 'stowed' : 'nominal')));
+      $('missionPhase').textContent = d.running ? ('DEMO — ' + d.step) : m.phase;
+      $('missionOrient').textContent = d.running
+        ? 'demonstration show running'
+        : m.orientation + (m.auto ? '' : ' — auto triggers off') + (m.upright_ref ? '' : ' — no upright reference yet')
+          + (d.armed ? ' — show armed on the launch pin' : '');
+      $('missionCountdown').textContent = d.running ? (d.remaining_s + 's left')
+        : (m.countdown_s ? ('deploy in ' + m.countdown_s + 's') : '');
     }
     $('clock').textContent = tm.time + ' (' + tm.clock_status + ')';
     const connected = hk.wifi.mode === 1 ? hk.wifi.connected : true;

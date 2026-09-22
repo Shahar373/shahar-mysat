@@ -34,8 +34,11 @@ static const uint8_t RF_SET_PIN = 4;
 // ---- servo / mechanism
 static const uint8_t  CLOSED_ANGLE       = 170;
 static const uint8_t  OPENED_ANGLE       = 10;
-static const uint16_t POWER_SUPPLY_DELAY = 2200;  // ms of servo power per move
-static const uint8_t  STEP_DELAY         = 10;    // ms per degree
+// These two come from shared/mysat_icd.h so the OBC can pace its commands to what this board
+// actually does -- the demonstration show in particular has to leave a full sweep between two
+// movements, and that number has to be the same on both sides of the I2C link.
+static const uint16_t POWER_SUPPLY_DELAY = AUX_SERVO_POWER_MS;  // ms of servo power per move
+static const uint8_t  STEP_DELAY         = AUX_SERVO_STEP_MS;   // ms per degree
 static const uint32_t RF_SET_AUTO_EXIT   = 60000; // leave AT mode by itself after 60 s
 static const uint32_t HB_STALE_MS        = 60000; // OBC considered silent after 60 s
 

@@ -11,8 +11,10 @@ static int g_unity_tests = 0, g_unity_failures = 0;
 static const char* g_unity_current = "";
 
 #define UNITY_BEGIN() do { g_unity_tests = 0; g_unity_failures = 0; } while (0)
-#define UNITY_END() (g_unity_failures > 0 ? 1 : 0); \
-  printf("\n%d tests, %d failed\n", g_unity_tests, g_unity_failures)
+// Comma operator, not two statements: written as `return UNITY_END();` the old two-statement form
+// put the printf after the return, so the summary line never actually appeared.
+#define UNITY_END() (printf("\n%d tests, %d failed\n", g_unity_tests, g_unity_failures), \
+                     g_unity_failures > 0 ? 1 : 0)
 
 #define RUN_TEST(f) do { g_unity_tests++; g_unity_current = #f; f(); printf("  ok  %s\n", #f); } while (0)
 
@@ -34,3 +36,8 @@ static const char* g_unity_current = "";
 #define TEST_ASSERT_EQUAL_HEX32(e, a)  do { if ((unsigned long)(e) != (unsigned long)(a)) UNITY_FAIL(#a " != " #e); } while (0)
 #define TEST_ASSERT_NOT_EQUAL(e, a)    do { if ((long)(e) == (long)(a)) UNITY_FAIL(#a " should differ from " #e); } while (0)
 #define TEST_ASSERT_EQUAL_STRING(e, a) do { if (strcmp((e), (a)) != 0) UNITY_FAIL("string mismatch: \"" #a "\" != \"" #e "\""); } while (0)
+#define TEST_ASSERT_EQUAL_INT16(e, a)  TEST_ASSERT_EQUAL_INT(e, a)
+#define TEST_ASSERT_EQUAL_INT32(e, a)  TEST_ASSERT_EQUAL_INT(e, a)
+#define TEST_ASSERT_EQUAL_UINT32(e, a) do { if ((unsigned long)(e) != (unsigned long)(a)) UNITY_FAIL(#a " != " #e); } while (0)
+#define TEST_ASSERT_GREATER_THAN_INT(t, a) do { if (!((long)(a) > (long)(t))) UNITY_FAIL(#a " is not greater than " #t); } while (0)
+#define TEST_ASSERT_LESS_OR_EQUAL_INT(t, a) do { if (!((long)(a) <= (long)(t))) UNITY_FAIL(#a " is greater than " #t); } while (0)

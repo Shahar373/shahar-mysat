@@ -11,3 +11,6 @@ void console_init();
 bool console_execute(const String& line, Print& out);
 void console_task_start();          // reads Serial non-blockingly and prints periodic telemetry frames
 void console_print_help(Print& out);
+void console_print_telemetry_frame(Print& out);
+// console_lock()/console_unlock(), which callers take around multi-line output, are declared in
+// core/log.h -- they guard the same Serial mutex the log lines use.

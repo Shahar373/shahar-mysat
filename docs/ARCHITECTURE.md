@@ -56,6 +56,7 @@ you'll `pio run` instead of clicking Verify in the Arduino IDE — the extension
 │  apps/          sensors       ★ owns I2C. Dedicated 200 Hz IMU loop   │
 │                                + 2 Hz env/sun/power/RTC loop           │
 │                 mission       separation -> deploy -> flip triggers    │
+│                 demo          the bench demonstration show             │
 │                 console       one-line commands (serial + web share  │
 │                                the same interpreter)                  │
 │                 data_logger   mission CSV, hourly rotation            │
@@ -77,6 +78,14 @@ you'll `pio run` instead of clicking Verify in the Arduino IDE — the extension
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+**The OBC speaks whichever protocol the Nano understands.** A status read that answers with a
+valid frame means the v2 firmware; one that does not means the firmware the kit ships with. In the
+second case `aux_send()` maps each command to that firmware's single byte where one exists (wings
+open, wings close, radio AT mode) and drops the rest, and a legacy verdict is upgraded the moment a
+later read answers. The mapping and the reason for it are in the ICD (`aux_legacy_equivalent`) and
+covered by host tests, because the stock firmware keeps only the last byte of a message: a framed
+command reaching it is either ignored or, for two checksum values, misread as a wing command.
+
 `shared/` is compiled into all three targets (`obc`, `aux`, `native`) and must stay free of
 Arduino/FreeRTOS types:
 - `mysat_icd.h` — the interface control document: AUX command/status wire format, mission mode and
@@ -90,6 +99,9 @@ Arduino/FreeRTOS types:
 - `attitude_trigger.h` — the orientation maths behind the deployment triggers: a learned "up"
   reference, upright/sideways/inverted classification, a settled-enough-to-judge test, and a
   hold-time debouncer.
+- `demo_show.h` — the demonstration show's schedule: a configuration expanded into a list of timed
+  steps, plus the spacing rule that keeps the servo commands apart. Portable for the same reason as
+  `attitude_trigger.h`: a servo moves because of it, so it is worth testing off-hardware.
 
 ## FreeRTOS task map
 
@@ -98,7 +110,7 @@ Arduino/FreeRTOS types:
 | `imu` | 1 | 200 Hz | IMU sampling only — the stock firmware's ~80%-of-rotation-lost bug (burst-read every 500 ms with a clamped first-sample dt) is fixed by giving attitude integration its own steady loop |
 | `sensors` | 1 | 2 Hz | env/sun/power/RTC read, publishes the `Telemetry` snapshot, runs a requested IMU calibration |
 | `console` | 1 | ~50 Hz poll | non-blocking serial read, periodic telemetry/plotter frame |
-| `mission` | 1 | 4 Hz | the deployment sequencer: separation, countdown, deploy with confirmation, orientation triggers |
+| `mission` | 1 | 4 Hz | the deployment sequencer: separation, countdown, deploy with confirmation, orientation triggers. Ticks at 20 Hz while the demonstration show runs, so a "three second" flash is three seconds |
 | `control` | 1 | 4 Hz | housekeeping refresh, AUX heartbeat + status poll, event log flush, watchdog feed |
 | `leds` | 1 | 50 Hz | SIGNAL LED animation, STAR LED blink-test sequencing |
 | `wifi` | 0 | event-driven | station connect with a bounded timeout, falls back to AP; never blocks anyone else |
@@ -157,6 +169,50 @@ This is the behaviour the owner asked for, built the way a real spacecraft does 
    any `solar ...` command  ->  [MANUAL], automatic triggers suspended
 ```
 
+## The demonstration show
+
+The owner also wanted a routine for showing the satellite to people: pull the pin, and instead of
+one deployment the cube performs a fixed act. `demo on` arms it; after that a power-on reset runs
+the show rather than the launch sequence above.
+
+```
+   launch pin pulled        ESP_RST_POWERON  +  demo.enabled  ->  [DEMO]
+          |
+          |  5 s arming hold (put the cube down, step back), cyan LED
+          v
+   wings out -> wings in, twice           each sweep 2.6 s + 0.4 s of rest, amber LED
+          |                               v2 AUX: to 15 / 165 deg, no stall, end angle read back
+          |                               stock AUX: full sweeps, nothing read back
+          v
+   front light on 3 s, off 1 s, 3x        STAR LED on GPIO14, 300 ms ramps
+          |
+          v
+   [NOMINAL] or [STOWED] depending on where the wings ended  (30.5 s in total)
+```
+
+Three things make this more than a list of delays:
+
+- **The schedule is data, not control flow** (`shared/demo_show.h`). It expands into a list of
+  timed steps, which lets a host test assert the properties that matter -- two wing cycles, three
+  three-second flashes, the light never left on at the end, and above all that no two servo
+  commands are closer together than the AUX controller can carry out.
+- **The servo spacing is a checked invariant, not a comment.** The AUX detaches the servo when
+  the commanded angle is reached, powers it for at most `AUX_SERVO_POWER_MS` if the mechanism
+  blocks it, and ignores a new movement while a sweep is running, so a command sent too early only
+  retargets the sweep in progress. That constant now lives in the ICD, both firmwares
+  use it, `demo_cfg_sanitize()` enforces it on every load and `params set`, and
+  `demo_min_servo_gap_ms()` is what the test asserts on.
+- **The mission sequencer holds the phase for the whole show.** `MPHASE_DEMO` is what keeps the
+  orientation triggers off the mechanism while it runs -- there is exactly one owner of the servo
+  at any moment. A `solar ...` command stops the show and takes it back.
+
+Honest limitations, the same ones the deployment sequence has: the servo has no position feedback,
+so "confirmed" means the AUX reported finishing at the angle it was asked for. Four sweeps per show
+is four times the mechanism wear of a single deployment -- that is the point of the show, but it is
+worth knowing before leaving it running in a loop. And `demo stop` cannot abort a sweep already in
+progress, because the protocol has no halt and stopping half way is worse for the mechanism than
+finishing.
+
 **A power-on reset is the separation event; a software or watchdog reset is not.** If the
 satellite reboots in flight it does not re-run its deployment. That distinction comes from
 `esp_reset_reason()`, and it is the same reason a real spacecraft latches its deployment state.
@@ -192,13 +248,24 @@ without another restructure.
 
 ## A note on how this was built
 
-This repository was bootstrapped in a network-isolated sandbox. The AUX (Nano) firmware and the
-`native` unit test suite were **actually compiled and run** here (see `tools/build_aux.sh` and
-`tools/run_native_tests.sh` — both work offline against a locally-cloned ArduinoCore-avr, no
-PlatformIO registry needed). The ESP32 (`obc`) target could **not** be compiled here: both the
-PlatformIO package registry and the Arduino board-manager's own tool index (needed even to install
-the Espressif core via `arduino-cli`) were unreachable from this sandbox, and the ESP32 toolchain
-plus precompiled Arduino-ESP32 libraries are several hundred MB, not something to vendor into git.
-Every third-party API call in `src/obc/` was cross-checked by hand against the actual vendored
-library headers in `lib/`, but you should still expect to fix a handful of real compiler errors on
-your first `pio run -e obc` — see `docs/FLASHING.md`.
+All three targets now build from source, and all three builds are reproducible offline-ish (GitHub
+release assets only, no PlatformIO or Arduino package registry):
+
+| Target | How it is verified | Result |
+|---|---|---|
+| `aux` (Nano) | `tools/build_aux.sh` — real avr-gcc against ArduinoCore-avr 1.8.6 + Servo | links, 6736 B flash / 499 B RAM |
+| `native` (host) | `tools/run_native_tests.sh` — plain g++ | 57 tests pass |
+| `obc` (ESP32-CAM) | `tools/build_obc.sh` — arduino-cli against Arduino-ESP32 2.0.17 and the xtensa-esp32-elf 8.4.0 toolchain | links, 1 057 585 B (33% of the huge_app slot), 55 160 B static RAM |
+
+The ESP32 target was written before it could be compiled — the sandbox this repository was
+bootstrapped in could not reach the PlatformIO registry or the Arduino board-manager index — and
+its first real build found exactly the class of problem that predicts: a missing `#include` for
+`core/log.h` in `apps/web.cpp`, and a name collision between this project's `ParamType` enum
+(`PT_U8`, `PT_STR`, ...) and the identically-named `PreferenceType` values in Arduino-ESP32's
+`Preferences.h`, which `core/params_store.cpp` includes alongside `shared/params_def.h`. Both are
+fixed; the enum is now `PARAM_U8` / `PARAM_STR` / ... for that reason.
+
+`tools/build_obc.sh` is a build check, not a replacement for PlatformIO: it exists because the
+package registries are blocked in some environments, exactly as `tools/build_aux.sh` does for the
+Nano. With ordinary internet access `pio run -e obc` is still the supported path, and it is what
+`docs/FLASHING.md` describes.
